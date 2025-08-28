@@ -179,7 +179,7 @@ gptHeader:Button({
 gptHeader:Button({
     Text = "ReJoin",
     Callback = function()
-        loadstring(game:HttpGet("https://raw.githubusercontent.com/RiseBlox/MyHub/main/GPT/ReJoin.lua,true))()
+        loadstring(game:HttpGet("https://raw.githubusercontent.com/RiseBlox/MyHub/main/GPT/ReJoin.lua",true))()
     end
 })
 utilsTab:Button({
@@ -232,4 +232,4 @@ slrHeader:Button({
     Callback = function()
         loadstring(game:HttpGet("https://raw.githubusercontent.com/RiseBlox/MyHub/main/Solara%20Fixes/Vulnerability%20Patcher.lua",true))()
     end
-}
+})
