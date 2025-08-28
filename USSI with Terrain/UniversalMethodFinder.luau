@@ -1,5 +1,3 @@
---!optimize 2
-
 local globalenv = getgenv and getgenv() or _G or shared
 local globalcontainer = globalenv.globalcontainer
 
