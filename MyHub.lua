@@ -22,7 +22,6 @@ funcsTab:Button({
             ["printcheckpoints"] = false,
             ["delaybetweentests"] = 0
         }
-        
         loadstring(game:HttpGet("https://gitlab.com/sens3/nebunu/-/raw/main/HummingBird8's_sUNC_yes_i_moved_to_gitlab_because_my_github_acc_got_brickedd/sUNCm0m3n7.lua?ref_type=heads",true))()
     end
 })
@@ -40,89 +39,90 @@ funcsTab:Button({
 })
 
 --[[ Game Focused ]]
-local jbHeader = gameTab:CollapsingHeader({Title = "Jailbreak", NoArrow = false})
-local paNode = jbHeader:TreeNode({Title = "Project Auto", NoArrow = false})
-paNode:Button({
+gameTab:Separator({Text="Jailbreak"})
+local paHeader = gameTab:CollapsingHeader({Title = "Project Auto", NoArrow = false})
+paHeader:Button({
     Text = "AutoRob",
     Callback = function()
         loadstring(game:HttpGet('https://scripts.projectauto.xyz/AutoRobV6',true))()
     end
 })
-paNode:Button({
+paHeader:Button({
     Text = "AutoArrest",
     Callback = function()
         loadstring(game:HttpGet('https://scripts.projectauto.xyz/AutoArrestV4',true))()
     end
 })
-local ufNode = jbHeader:TreeNode({Title = "Universal Farm", NoArrow = false})
-ufNode:Button({
+local ufHeader = gameTab:CollapsingHeader({Title = "Universal Farm", NoArrow = false})
+ufHeader:Button({
     Text = "Loader",
     Callback = function()
         loadstring(game:HttpGet('https://raw.githubusercontent.com/BlitzIsKing/UniversalFarm/main/Loader/Regular',true))()
     end
 })
-ufNode:Button({
+ufHeader:Button({
     Text = "AutoRob",
     Callback = function()
         loadstring(game:HttpGet("https://api.luarmor.net/files/v3/loaders/cf83df89dc364d86bafd481d72bdd953.lua",true))()
     end
 })
-ufNode:Button({
+ufHeader:Button({
     Text = "AutoArrest",
     Callback = function()
         loadstring(game:HttpGet("https://api.luarmor.net/files/v3/loaders/ef2b75a1c0445997d44b7371f11ee88a.lua",true))()
     end
 })
-jbHeader:Button({
+gameTab:Button({
     Text = "Sensation",
     Callback = function()
         loadstring(game:HttpGet("https://api.luarmor.net/files/v3/loaders/730854e5b6499ee91deb1080e8e12ae3.lua",true))()
     end
 })
-jbHeader:Button({
+gameTab:Button({
     Text = "Ice Tray",
     Callback = function()
         loadstring(game:HttpGet("https://raw.githubusercontent.com/piglex9/icetray3/main/latest.lua",true))()
     end
 })
-jbHeader:Button({
+gameTab:Button({
     Text = "PayPal",
     Callback = function()
         loadstring(game:HttpGet("https://api.luarmor.net/files/v3/loaders/472776ba5c9893001fd78d5a8f442b08.lua",true))()
     end
 })
-local rivalsHeader = gameTab:CollapsingHeader({Title = "Rivals", NoArrow = false})
-rivalsHeader:Button({
+gameTab:Separator({Text="Rivals"})
+gameTab:Button({
     Text = "Gun Mods",
     Callback = function()
         loadstring(game:HttpGet("https://raw.githubusercontent.com/RiseBlox/MyHub/main/Gun%20Mods.lua",true))()
     end
 })
-rivalsHeader:Button({
+gameTab:Button({
     Text = "Duck Hub",
     Callback = function()
         loadstring(game:HttpGet('https://raw.githubusercontent.com/HexFG/duckhub/refs/heads/main/loader.lua',true))()
     end
 })
-local bwHeader = gameTab:CollapsingHeader({Title = "BedWars", NoArrow = false})
-bwHeader:Button({
+gameTab:Separator({Text="BedWars"})
+gameTab:Button({
     Text = "VapeV4",
     Callback = function()
         loadstring(game:HttpGet("https://raw.githubusercontent.com/7GrandDadPGN/VapeV4ForRoblox/main/NewMainScript.lua", true))()
     end
 })
-bwHeader:Button({
+gameTab:Button({
     Text = "VoidWare",
     Callback = function()
         loadstring(game:HttpGet("https://raw.githubusercontent.com/VapeVoidware/VW-Add/main/inkgame.lua", true))()
     end
 })
-bwHeader:Button({
+gameTab:Button({
     Text = "VapeLite",
     Callback = function()
         loadstring(game:HttpGet("https://raw.githubusercontent.com/7GrandDadPGN/VapeLiteForRoblox/main/NewMainScript.lua", true))()
     end
 })
+gameTab:Separator({Text="Other"})
 gameTab:Button({
     Text = "Thunder Client Lite (Arsenal)",
     Callback = function()
@@ -169,19 +169,20 @@ hubsTab:Button({
 })
 
 --[[ Utilities ]]
-local gptHeader = utilsTab:CollapsingHeader({Title = "GPT", NoArrow = false})
-gptHeader:Button({
+utilsTab:Separator({Text="GPT"})
+utilsTab:Button({
     Text = "AntiLag",
     Callback = function()
         loadstring(game:HttpGet("https://raw.githubusercontent.com/RiseBlox/MyHub/main/GPT/AntiLag.lua",true))()
     end
 })
-gptHeader:Button({
+utilsTab:Button({
     Text = "ReJoin",
     Callback = function()
         loadstring(game:HttpGet("https://raw.githubusercontent.com/RiseBlox/MyHub/main/GPT/ReJoin.lua",true))()
     end
 })
+utilsTab:Separator({Text="Random"})
 utilsTab:Button({
     Text = "Infinite Yield FE",
     Callback = function()
@@ -220,14 +221,14 @@ utilsTab:Button({
         game.Players.LocalPlayer:Kick("kicked")
     end
 })
-local slrHeader = utilsTab:CollapsingHeader({Title = "Solara Fixes", NoArrow = false})
-slrHeader:Button({
+utilsTab:Separator({Text="Solara Fixes"})
+utilsTab:Button({
     Text = "Upgrader",
     Callback = function()
         loadstring(game:HttpGet("https://raw.githubusercontent.com/RiseBlox/MyHub/main/Solara%20Fixes/Upgrader.lua",true))()
     end
 })
-slrHeader:Button({
+utilsTab:Button({
     Text = "Vulnerability Patcher",
     Callback = function()
         loadstring(game:HttpGet("https://raw.githubusercontent.com/RiseBlox/MyHub/main/Solara%20Fixes/Vulnerability%20Patcher.lua",true))()
