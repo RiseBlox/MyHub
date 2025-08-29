@@ -114,7 +114,7 @@ gameTab:Separator({
 gameTab:Button({
 	Text = "Gun Mods",
 	Callback = function()
-		loadstring(game:HttpGet("https://raw.githubusercontent.com/RiseBlox/MyHub/main/Codes/Misc./Gun%20Mods%20(Rivals).lua", true))()
+		loadstring(game:HttpGet("https://raw.githubusercontent.com/RiseBlox/MyHub/main/Codes/Misc/Gun%20Mods%20(Rivals).lua", true))()
 	end
 })
 gameTab:Button({
