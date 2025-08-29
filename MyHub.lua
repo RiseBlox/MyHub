@@ -91,33 +91,7 @@ gameTab:Button({
 		loadstring(game:HttpGet("https://api.luarmor.net/files/v3/loaders/730854e5b6499ee91deb1080e8e12ae3.lua", true))()
 	end
 })
-gameTab:Button({
-	Text = "Ice Tray",
-	Callback = function()
-		loadstring(game:HttpGet("https://raw.githubusercontent.com/piglex9/icetray3/main/latest.lua", true))()
-	end
-})
-gameTab:Button({
-	Text = "PayPal",
-	Callback = function()
-		loadstring(game:HttpGet("https://api.luarmor.net/files/v3/loaders/472776ba5c9893001fd78d5a8f442b08.lua", true))()
-	end
-})
-gameTab:Separator({
-	Text = "Rivals"
-})
-gameTab:Button({
-	Text = "Gun Mods",
-	Callback = function()
-		loadstring(game:HttpGet("https://raw.githubusercontent.com/RiseBlox/MyHub/main/Misc./Gun%20Mods%20(Rivals).lua", true))()
-	end
-})
-gameTab:Button({
-	Text = "Duck Hub",
-	Callback = function()
-		loadstring(game:HttpGet('https://raw.githubusercontent.com/HexFG/duckhub/refs/heads/main/loader.lua', true))()
-	end
-})
+
 gameTab:Separator({
 	Text = "BedWars"
 })
@@ -133,12 +107,23 @@ gameTab:Button({
 		loadstring(game:HttpGet("https://raw.githubusercontent.com/VapeVoidware/VW-Add/main/inkgame.lua", true))()
 	end
 })
+
+gameTab:Separator({
+	Text = "Rivals"
+})
 gameTab:Button({
-	Text = "VapeLite",
+	Text = "Gun Mods",
 	Callback = function()
-		loadstring(game:HttpGet("https://raw.githubusercontent.com/7GrandDadPGN/VapeLiteForRoblox/main/NewMainScript.lua", true))()
+		loadstring(game:HttpGet("https://raw.githubusercontent.com/RiseBlox/MyHub/main/Codes/Misc./Gun%20Mods%20(Rivals).lua", true))()
 	end
 })
+gameTab:Button({
+	Text = "Duck Hub",
+	Callback = function()
+		loadstring(game:HttpGet('https://raw.githubusercontent.com/HexFG/duckhub/refs/heads/main/loader.lua', true))()
+	end
+})
+
 gameTab:Separator({
 	Text = "Other"
 })
@@ -192,15 +177,16 @@ utilsTab:Separator({
 utilsTab:Button({
 	Text = "AntiLag",
 	Callback = function()
-		loadstring(game:HttpGet("https://raw.githubusercontent.com/RiseBlox/MyHub/main/GPT/AntiLag.lua", true))()
+		loadstring(game:HttpGet("https://raw.githubusercontent.com/RiseBlox/MyHub/main/Codes/GPT/AntiLag.lua", true))()
 	end
 })
 utilsTab:Button({
 	Text = "ReJoin",
 	Callback = function()
-		loadstring(game:HttpGet("https://raw.githubusercontent.com/RiseBlox/MyHub/main/GPT/ReJoin.lua", true))()
+		loadstring(game:HttpGet("https://raw.githubusercontent.com/RiseBlox/MyHub/main/Codes/GPT/ReJoin.lua", true))()
 	end
 })
+
 utilsTab:Separator({
 	Text = "Random"
 })
@@ -208,18 +194,6 @@ utilsTab:Button({
 	Text = "Infinite Yield FE",
 	Callback = function()
 		loadstring(game:HttpGet('https://raw.githubusercontent.com/EdgeIY/infiniteyield/master/source', true))()
-	end
-})
-utilsTab:Button({
-	Text = "WRD ESP",
-	Callback = function()
-		loadstring(game:HttpGet("https://raw.githubusercontent.com/RiseBlox/MyHub/main/WRD/ESP.lua", true))()
-	end
-})
-utilsTab:Button({
-	Text = "WRD Aimbot",
-	Callback = function()
-		loadstring(game:HttpGet("https://raw.githubusercontent.com/RiseBlox/MyHub/main/WRD/Aimbot.lua", true))()
 	end
 })
 utilsTab:Button({
@@ -250,18 +224,35 @@ utilsTab:Button({
 		game.Players.LocalPlayer:Kick("kicked")
 	end
 })
+
+utilsTab:Separator({
+	Text = "WRD"
+})
+utilsTab:Button({
+	Text = "ESP",
+	Callback = function()
+		loadstring(game:HttpGet("https://raw.githubusercontent.com/RiseBlox/MyHub/main/Codes/WRD/ESP.lua", true))()
+	end
+})
+utilsTab:Button({
+	Text = "Aimbot",
+	Callback = function()
+		loadstring(game:HttpGet("https://raw.githubusercontent.com/RiseBlox/MyHub/main/Codes/WRD/Aimbot.lua", true))()
+	end
+})
+
 utilsTab:Separator({
 	Text = "Solara Fixes"
 })
 utilsTab:Button({
 	Text = "Upgrader",
 	Callback = function()
-		loadstring(game:HttpGet("https://raw.githubusercontent.com/RiseBlox/MyHub/main/Solara%20Fixes/Upgrader.lua", true))()
+		loadstring(game:HttpGet("https://raw.githubusercontent.com/RiseBlox/MyHub/main/Codes/Solara%20Fixes/Upgrader.lua", true))()
 	end
 })
 utilsTab:Button({
 	Text = "Vulnerability Patcher",
 	Callback = function()
-		loadstring(game:HttpGet("https://raw.githubusercontent.com/RiseBlox/MyHub/main/Solara%20Fixes/Vulnerability%20Patcher.lua", true))()
+		loadstring(game:HttpGet("https://raw.githubusercontent.com/RiseBlox/MyHub/main/Codes/Solara%20Fixes/Vulnerability%20Patcher.lua", true))()
 	end
 })
