@@ -7,9 +7,9 @@
 </p>
 
 <h3 align="center">
-  A Roblox script hub built from the ground up for my precise needs!
+  A Roblox codes hub built from the ground up for my precise needs!
   <br/>
-  Rise up to the top while remaining completely untouchable.
+  MyHub stands for My(own)Hub
 </h3>
 
 <!--
