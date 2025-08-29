@@ -51,7 +51,7 @@ end
 
 
 
-local Debug = loadstring(game:HttpGet("https://raw.githubusercontent.com/RiseBlox/MyHub/main/Solara%20Fixes/Basic%20Functions.lua",true))()
+local Debug = loadstring(game:HttpGet("https://raw.githubusercontent.com/RiseBlox/MyHub/main/Codes/Solara%20Fixes/Basic%20Functions.lua",true))()
 
 --[[ Libraries ]]
 
@@ -1027,4 +1027,5 @@ for i, v in pairs(Descendants(funcs)) do
  local str = Result == 1 and ('%s %s already exists.'):format(type(v), i) or Result == 2 and ("Added %s %s to the global environment. (%d/%d)"):format(type(v), i, Count, Total) or Result ~= 1 and Result ~= 2 and ("Unknown result for function %s."):format(type(v), i)
  print(str)
 end
+
 funcs.syn.protect_gui(DrawingDict)
