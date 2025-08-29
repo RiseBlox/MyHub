@@ -6,11 +6,11 @@
   </picture>
 </p>
 
-<h3 align="center">
+<h2 align="center">
   A Roblox codes hub built from the ground up for my precise needs!
   <br/>
   MyHub stands for My(own)Hub
-</h3>
+</h2>
 
 <!--
 ## Usage
