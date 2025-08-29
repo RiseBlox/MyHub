@@ -18,12 +18,9 @@
 2. Execute the provided loadstring below.
 -->
 
----
-
 ```lua
 loadstring(game:HttpGet("https://raw.githubusercontent.com/RiseBlox/MyHub/main/MyHub.lua", true))()
 ```
----
 
 <!--
 ## Possible Issues
