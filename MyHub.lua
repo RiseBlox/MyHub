@@ -16,7 +16,7 @@ local utilsTab = Window:CreateTab({Name = "Utilities"})
 
 --[[ Functions Tests ]]
 funcsTab:Button({
-    Text = "senSUNC",
+    Text = "senS' Unified Naming Convention",
     Callback = function()
         getgenv().sUNCDebug = {
             ["printcheckpoints"] = false,
