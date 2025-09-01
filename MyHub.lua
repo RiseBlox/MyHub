@@ -104,7 +104,7 @@ gameTab:Button({
 gameTab:Button({
 	Text = "VoidWare",
 	Callback = function()
-		loadstring(game:HttpGet("https://raw.githubusercontent.com/VapeVoidware/VW-Add/main/inkgame.lua", true))()
+		loadstring(game:HttpGet("https://raw.githubusercontent.com/VapeVoidware/VWRewrite/main/NewMainScript.lua", true))()
 	end
 })
 
@@ -131,6 +131,12 @@ gameTab:Button({
 	Text = "Thunder Client Lite (Arsenal)",
 	Callback = function()
 		loadstring(game:HttpGet('https://raw.githubusercontent.com/andrewdarkyyofficial/thunderclient/main/main.lua', true))()
+	end
+})
+gameTab:Button({
+	Text = "VoidWare (Ink Game)",
+	Callback = function()
+		loadstring(game:HttpGet("https://raw.githubusercontent.com/VapeVoidware/VW-Add/main/inkgame.lua", true))()
 	end
 })
 gameTab:Button({
