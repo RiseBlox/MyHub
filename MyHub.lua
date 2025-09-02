@@ -1,4 +1,3 @@
---[[ UI Settings ]]
 local ReGui = loadstring(game:HttpGet("https://raw.githubusercontent.com/depthso/Dear-ReGui/refs/heads/main/ReGui.lua", true))()
 
 local Window = ReGui:TabsWindow({
@@ -7,7 +6,6 @@ local Window = ReGui:TabsWindow({
 	NoGradients = true,
 	BackgroundTransparency = 0
 })
---[[ Tabs ]]
 local funcsTab = Window:CreateTab({
 	Name = "Functions Tests"
 })
@@ -20,7 +18,6 @@ local hubsTab = Window:CreateTab({
 local utilsTab = Window:CreateTab({
 	Name = "Utilities"
 })
---[[ Functions Tests ]]
 funcsTab:Button({
 	Text = "senS' Unified Naming Convention",
 	Callback = function()
@@ -43,7 +40,6 @@ funcsTab:Button({
 		loadstring(game:HttpGet("https://raw.githubusercontent.com/unified-naming-convention/NamingStandard/refs/heads/main/UNCCheckEnv.lua", true))()
 	end
 })
---[[ Game Focused ]]
 gameTab:Separator({
 	Text = "Jailbreak"
 })
@@ -120,13 +116,13 @@ gameTab:Button({
 gameTab:Button({
 	Text = "Duck Hub",
 	Callback = function()
-		loadstring(game:HttpGet('https://raw.githubusercontent.com/HexFG/duckhub/refs/heads/main/loader.lua', true))()
+		loadstring(game:HttpGet('https://raw.githubusercontent.com/HexFG/duckhub/main/loader.lua', true))()
 	end
 })
 gameTab:Button({
 	Text = "kiciahook",
 	Callback = function()
-		loadstring(game:HttpGet("https://raw.githubusercontent.com/kiciahook/kiciahook/main/loader.luau",true))()
+		loadstring(game:HttpGet("https://raw.githubusercontent.com/kiciahook/kiciahook/main/loader.luau", true))()
 	end
 })
 gameTab:Separator({
@@ -150,7 +146,6 @@ gameTab:Button({
 		loadstring(game:HttpGet("https://raw.githubusercontent.com/Straden/Scripts/main/MM2.lua", true))()
 	end
 })
---[[ Hubs ]]
 hubsTab:Button({
 	Text = "OrcaHub",
 	Callback = function()
@@ -160,34 +155,9 @@ hubsTab:Button({
 hubsTab:Button({
 	Text = "Owl Hub",
 	Callback = function()
-		loadstring(game:HttpGet("https://raw.githubusercontent.com/CriShoux/OwlHub/master/OwlHub.txt",true))()
+		loadstring(game:HttpGet("https://raw.githubusercontent.com/CriShoux/OwlHub/master/OwlHub.txt", true))()
 	end
 })
-hubsTab:Button({
-	Text = "AirHub V2",
-	Callback = function()
-		loadstring(game:HttpGet("https://raw.githubusercontent.com/Exunys/AirHub-V2/main/src/Main.lua", true))()
-	end
-})
-hubsTab:Button({
-	Text = "AirHub",
-	Callback = function()
-		loadstring(game:HttpGet("https://raw.githubusercontent.com/Exunys/AirHub/main/AirHub.lua", true))()
-	end
-})
-hubsTab:Button({
-	Text = "SpaceHub",
-	Callback = function()
-		loadstring(game:HttpGet("https://raw.githubusercontent.com/Lucasfin000/Orbit-UI-Library/main/Library", true))()
-	end
-})
-hubsTab:Button({
-	Text = "NukeHub",
-	Callback = function()
-		loadstring(game:HttpGet("https://raw.githubusercontent.com/NukeVsCity/TheALLHACKLoader/main/NukeLoader", true))()
-	end
-})
---[[ Utilities ]]
 utilsTab:Separator({
 	Text = "GPT"
 })
@@ -216,7 +186,7 @@ utilsTab:Button({
 utilsTab:Button({
 	Text = "Freecam",
 	Callback = function()
-		loadstring(game:HttpGet("https://raw.githubusercontent.com/RiseBlox/MyHub/main/Codes/Misc/Freecam.lua",true))()
+		loadstring(game:HttpGet("https://raw.githubusercontent.com/RiseBlox/MyHub/main/Codes/Misc/Freecam.lua", true))()
 	end
 })
 utilsTab:Button({
@@ -233,12 +203,6 @@ utilsTab:Button({
 			mode = "full"
 		}
 		synsaveinstance(SaveinstanceOptions);
-	end
-})
-utilsTab:Button({
-	Text = "FE ChatHax",
-	Callback = function()
-		loadstring(game:HttpGet("https://raw.githubusercontent.com/RiseBlox/MyHub/main/Codes/Misc/FE%20ChatHax.lua",true))()
 	end
 })
 utilsTab:Button({
@@ -268,16 +232,13 @@ utilsTab:Separator({
 utilsTab:Button({
 	Text = "Dex",
 	Callback = function()
-		loadstring(game:HttpGet("https://raw.githubusercontent.com/RiseBlox/MyHub/main/Codes/Misc/Dex.lua",true))()
+		loadstring(game:HttpGet("https://raw.githubusercontent.com/RiseBlox/MyHub/main/Codes/Misc/Dex.lua", true))()
 	end
 })
 utilsTab:Button({
 	Text = "TSDex",
 	Callback = function()
-		local f = Instance.new("Folder", game:GetService("CoreGui").RobloxGui)
-		f.Name = "DexHost"
-		loadstring(game:HttpGet("https://raw.githubusercontent.com/FaithfulAC/universal-stuff/main/true-secure-dex-bypasses.lua"))(nil, f, true)
-		run_on_actor(Instance.new("Actor"), "local in_actor = true;\n\n" .. game:HttpGet("https://raw.githubusercontent.com/FaithfulAC/universal-stuff/main/true-secure-dex.lua"))
+		loadstring(game:HttpGet("https://raw.githubusercontent.com/FaithfulAC/universal-stuff/main/true-secure-dex.lua", true))()
 	end
 })
 utilsTab:Separator({
