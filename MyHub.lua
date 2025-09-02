@@ -123,7 +123,12 @@ gameTab:Button({
 		loadstring(game:HttpGet('https://raw.githubusercontent.com/HexFG/duckhub/refs/heads/main/loader.lua', true))()
 	end
 })
-
+gameTab:Button({
+	Text = "kiciahook",
+	Callback = function()
+		loadstring(game:HttpGet("https://raw.githubusercontent.com/kiciahook/kiciahook/main/loader.luau",true))()
+	end
+})
 gameTab:Separator({
 	Text = "Other"
 })
@@ -150,6 +155,12 @@ hubsTab:Button({
 	Text = "OrcaHub",
 	Callback = function()
 		loadstring(game:HttpGet("https://raw.githubusercontent.com/richie0866/orca/master/public/latest.lua", true))()
+	end
+})
+hubsTab:Button({
+	Text = "Owl Hub",
+	Callback = function()
+		loadstring(game:HttpGet("https://raw.githubusercontent.com/CriShoux/OwlHub/master/OwlHub.txt",true))()
 	end
 })
 hubsTab:Button({
@@ -203,6 +214,12 @@ utilsTab:Button({
 	end
 })
 utilsTab:Button({
+	Text = "Freecam",
+	Callback = function()
+		loadstring(game:HttpGet("https://raw.githubusercontent.com/RiseBlox/MyHub/main/Codes/Misc/Freecam.lua",true))()
+	end
+})
+utilsTab:Button({
 	Text = "USSI with Terrain",
 	Callback = function()
 		local synsaveinstance = loadstring(game:HttpGet("https://raw.githubusercontent.com/verysigmapro/UniversalSynSaveInstance-With-Save-Terrain/refs/heads/main/saveinstance_rewrite.luau", true), "saveinstance")();
@@ -219,9 +236,9 @@ utilsTab:Button({
 	end
 })
 utilsTab:Button({
-	Text = "Scarlet Aimbot",
+	Text = "FE ChatHax",
 	Callback = function()
-		loadstring(game:HttpGet("https://raw.githubusercontent.com/ScarletLAB/scarlet/main/universal/main.lua", true))()
+		loadstring(game:HttpGet("https://raw.githubusercontent.com/RiseBlox/MyHub/main/Codes/Misc/FE%20ChatHax.lua",true))()
 	end
 })
 utilsTab:Button({
@@ -230,7 +247,6 @@ utilsTab:Button({
 		game.Players.LocalPlayer:Kick("kicked")
 	end
 })
-
 utilsTab:Separator({
 	Text = "WRD"
 })
@@ -246,7 +262,24 @@ utilsTab:Button({
 		loadstring(game:HttpGet("https://raw.githubusercontent.com/RiseBlox/MyHub/main/Codes/WRD/Aimbot.lua", true))()
 	end
 })
-
+utilsTab:Separator({
+	Text = "Explorers"
+})
+utilsTab:Button({
+	Text = "Dex",
+	Callback = function()
+		loadstring(game:HttpGet("https://raw.githubusercontent.com/RiseBlox/MyHub/main/Codes/Misc/Dex.lua",true))()
+	end
+})
+utilsTab:Button({
+	Text = "TSDex",
+	Callback = function()
+		local f = Instance.new("Folder", game:GetService("CoreGui").RobloxGui)
+		f.Name = "DexHost"
+		loadstring(game:HttpGet("https://raw.githubusercontent.com/FaithfulAC/universal-stuff/main/true-secure-dex-bypasses.lua"))(nil, f, true)
+		run_on_actor(Instance.new("Actor"), "local in_actor = true;\n\n" .. game:HttpGet("https://raw.githubusercontent.com/FaithfulAC/universal-stuff/main/true-secure-dex.lua"))
+	end
+})
 utilsTab:Separator({
 	Text = "Solara Fixes"
 })
