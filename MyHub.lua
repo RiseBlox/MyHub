@@ -2,7 +2,7 @@ local ReGui = loadstring(game:HttpGet("https://raw.githubusercontent.com/depthso
 
 local Window = ReGui:TabsWindow({
 	Title = "MyHub",
-	Size = UDim2.fromOffset(336, 226),
+	Size = UDim2.fromOffset(296, 178),
 	NoGradients = true,
 	BackgroundTransparency = 0
 })
@@ -11,9 +11,6 @@ local funcsTab = Window:CreateTab({
 })
 local gameTab = Window:CreateTab({
 	Name = "Game Focused"
-})
-local hubsTab = Window:CreateTab({
-	Name = "Hubs"
 })
 local utilsTab = Window:CreateTab({
 	Name = "Utilities"
@@ -146,18 +143,6 @@ gameTab:Button({
 		loadstring(game:HttpGet("https://raw.githubusercontent.com/Straden/Scripts/main/MM2.lua", true))()
 	end
 })
-hubsTab:Button({
-	Text = "OrcaHub",
-	Callback = function()
-		loadstring(game:HttpGet("https://raw.githubusercontent.com/richie0866/orca/master/public/latest.lua", true))()
-	end
-})
-hubsTab:Button({
-	Text = "Owl Hub",
-	Callback = function()
-		loadstring(game:HttpGet("https://raw.githubusercontent.com/CriShoux/OwlHub/master/OwlHub.txt", true))()
-	end
-})
 utilsTab:Separator({
 	Text = "GPT"
 })
@@ -184,12 +169,6 @@ utilsTab:Button({
 	end
 })
 utilsTab:Button({
-	Text = "Freecam",
-	Callback = function()
-		loadstring(game:HttpGet("https://raw.githubusercontent.com/RiseBlox/MyHub/main/Codes/Misc/Freecam.lua", true))()
-	end
-})
-utilsTab:Button({
 	Text = "USSI with Terrain",
 	Callback = function()
 		local synsaveinstance = loadstring(game:HttpGet("https://raw.githubusercontent.com/verysigmapro/UniversalSynSaveInstance-With-Save-Terrain/refs/heads/main/saveinstance_rewrite.luau", true), "saveinstance")();
@@ -203,6 +182,18 @@ utilsTab:Button({
 			mode = "full"
 		}
 		synsaveinstance(SaveinstanceOptions);
+	end
+})
+utilsTab:Button({
+	Text = "Freecam",
+	Callback = function()
+		loadstring(game:HttpGet("https://raw.githubusercontent.com/RiseBlox/MyHub/main/Codes/Misc/Freecam.lua", true))()
+	end
+})
+utilsTab:Button({
+	Text = "OrcaHub",
+	Callback = function()
+		loadstring(game:HttpGet("https://raw.githubusercontent.com/richie0866/orca/master/public/latest.lua", true))()
 	end
 })
 utilsTab:Button({
