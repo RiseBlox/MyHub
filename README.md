@@ -7,9 +7,9 @@
 </p>
 
 <h2 align="center">
-  A Roblox codes hub built from the ground up for my precise needs!
+  🧱 A Roblox codes hub built from the ground up for my precise needs 🏗️
   <br/>
-  MyHub stands for My(own)Hub
+  📜 Featured a bunch of useful codes for a variety of experiences 🤩
 </h2>
 
 <!--
@@ -21,6 +21,10 @@
 ```lua
 loadstring(game:HttpGet("https://raw.githubusercontent.com/RiseBlox/MyHub/main/MyHub.lua", true))()
 ```
+
+<h6 align="center">
+  🔎 MyHub stands for My(own)Hub 😂
+</h6>
 
 <!--
 ## Possible Issues
