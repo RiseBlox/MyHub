@@ -6,13 +6,13 @@
   </picture>
 </p>
 
+<!--
 <h2 align="center">
   🧱 A Roblox codes hub built from the ground up for my precise needs 🏗️
   <br/>
   📜 Featured a bunch of useful codes for a variety of experiences 🤩
 </h2>
 
-<!--
 ## Usage
 1. Download the specific scripting utility of your choice.
 2. Execute the provided loadstring below.
@@ -22,11 +22,11 @@
 loadstring(game:HttpGet("https://raw.githubusercontent.com/RiseBlox/MyHub/main/MyHub.lua", true))()
 ```
 
+<!--
 <h6 align="center">
   🔎 MyHub stands for My(own)Hub 😂
 </h6>
 
-<!--
 ## Possible Issues
 Half of the time its usually the scripting utility at fault, please make sure the utility meets certain quality standards such as.
 1. Supporting file functions & the debug library.
