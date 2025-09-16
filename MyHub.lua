@@ -197,6 +197,12 @@ utilsTab:Button({
 	end
 })
 utilsTab:Button({
+	Text = "Device Spoofer",
+	Callback = function()
+		loadstring(game:HttpGet("https://raw.githubusercontent.com/RiseBlox/MyHub/main/Codes/Misc/Device%20Spoofer.lua", true))()
+	end
+})
+utilsTab:Button({
 	Text = "Kick yourself",
 	Callback = function()
 		game.Players.LocalPlayer:Kick("kicked")
