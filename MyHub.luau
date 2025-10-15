@@ -88,9 +88,9 @@ unTab:Button({
 	end
 })
 unTab:Button({
-	Text = "ReJoin",
+	Text = "InfSession",
 	Callback = function()
-		loadstring(game:HttpGet("https://raw.githubusercontent.com/RiseBlox/MyHub/main/Codes/GPT/ReJoin.lua", true))()
+		loadstring(game:HttpGet("https://raw.githubusercontent.com/RiseBlox/MyHub/main/Codes/GPT/InfSession.lua", true))()
 	end
 })
 unTab:Separator({
