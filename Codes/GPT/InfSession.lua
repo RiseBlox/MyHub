@@ -170,4 +170,5 @@ end)
 -- Initial pass
 applyLighting()
 optimizeTerrain()
+
 streamedOptimize()
