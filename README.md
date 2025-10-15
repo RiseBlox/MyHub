@@ -6,40 +6,14 @@
   </picture>
 </p>
 
-<!--
-<h2 align="center">
-  🧱 A Roblox codes hub built from the ground up for my precise needs 🏗️
-  <br/>
-  📜 Featured a bunch of useful codes for a variety of experiences 🤩
-</h2>
-
-## Usage
-1. Download the specific scripting utility of your choice.
-2. Execute the provided loadstring below.
--->
+<h6 align="center">
+--- Free. Powerful. Lightweight. ---
+</h6>
 
 ```lua
-loadstring(game:HttpGet("https://raw.githubusercontent.com/RiseBlox/MyHub/main/MyHub.lua", true))()
+loadstring(game:HttpGet("https://raw.githubusercontent.com/RiseBlox/MyHub/refs/heads/main/MyHub.lua", true))()
 ```
 
 <!--
-<h6 align="center">
-  🔎 MyHub stands for My(own)Hub 😂
-</h6>
-
-## Possible Issues
-Half of the time its usually the scripting utility at fault, please make sure the utility meets certain quality standards such as.
-1. Supporting file functions & the debug library.
-2. Not implementing lua generated / half baked versions of such functions resulting in unintended behavior.
-3. Maintaining the same behavior across all usages of said functions.
-
-### User Issues
-If its not the supposed utility at fault, please try some troubleshooting steps.
-1. Making sure you have connection to [the main loadstring.](https://raw.githubusercontent.com/RiseBlox/MyHub/main/MyHub.lua)
-2. Ensuring no external script is conflicting with MyHub.
-3. Delete everything in the workspace folder. (LAST RESORT)
-
-## Developers & Credits
-[RiseBlox](https://github.com/RiseBlox) - Lead maintainer of the project
-<br/>
-[7GrandDad](https://github.com/7GrandDadPGN) - README.md format
+<img width="504" height="392" alt="image" src="https://github.com/user-attachments/assets/31319f44-ab4e-4dd5-b180-933770411684" />
+--!>
