@@ -1,7 +1,7 @@
 local ReGui = loadstring(game:HttpGet("https://raw.githubusercontent.com/depthso/Dear-ReGui/refs/heads/main/ReGui.lua", true))()
 local Window = ReGui:TabsWindow({
-	Title = "MyHub V2",
-	Size = UDim2.fromOffset(322, 550),
+	Title = "MyHub V2 - Mobile",
+	Size = UDim2.fromOffset(322, 197),
 	NoGradients = true,
 	BackgroundTransparency = 100
 })
