@@ -4,7 +4,7 @@ pcall(function()
     local GuiService = game:GetService("GuiService")
     local VirtualUser = game:GetService("VirtualUser")
     local LocalPlayer = Players.LocalPlayer
-
+    ---
     local function initializeProtections()
         if not game:IsLoaded() then
             game.Loaded:Wait()
@@ -13,10 +13,9 @@ pcall(function()
             task.wait()
         end
         LocalPlayer = Players.LocalPlayer
-
-        -- AntiKick (Full — IY style)
+        ---
         if not hookmetamethod then
-            warn("Incompatible exploit: missing hookmetamethod")
+            warn("Incompatible IDE (missing hookmetamethod)")
             return
         end
 
@@ -40,8 +39,7 @@ pcall(function()
             end
             return oldNamecall(self, ...)
         end)
-
-        -- AntiAFK (IY + ReJoin fallback)
+        ---
         local GC = getconnections or get_signal_cons
         local success = false
         if GC then
@@ -64,8 +62,7 @@ pcall(function()
                 VirtualUser:ClickButton2(Vector2.new())
             end)
         end
-
-        -- AutoRejoin (IY logic — standalone)
+        --
         GuiService.ErrorMessageChanged:Connect(function()
             task.wait(1)
             local PlaceId = game.PlaceId
@@ -93,4 +90,5 @@ pcall(function()
     end)
 
     initializeProtections()
+
 end)
