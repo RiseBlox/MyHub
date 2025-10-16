@@ -1,7 +1,7 @@
 local UserInputService = game:GetService("UserInputService")
 ---
 local pcVersion = "https://raw.githubusercontent.com/RiseBlox/MyHub/main/MyHub.luau"
-local mobileVersion = "https://raw.githubusercontent.com/RiseBlox/MyHub/main/MyHub%20-%20Mobile.luau"
+local mobileVersion = "https://raw.githubusercontent.com/RiseBlox/MyHub/main/MobileHub.luau"
 ---
 local function loadMyHub(url)
     loadstring(game:HttpGet(url, true))()
