@@ -1,52 +1,37 @@
 if not game:IsLoaded() then
 	game.Loaded:Wait()
 end
-
+---
 local Players = game:GetService("Players")
 local Lighting = game:GetService("Lighting")
 local Workspace = game:GetService("Workspace")
 local RunService = game:GetService("RunService")
-
--- Safe destroy
+---
 local function safeDestroy(obj)
 	if obj and obj.Destroy then
 		pcall(function() obj:Destroy() end)
 	end
 end
-
--- Minimal gray sky
-local function setGraySky()
-	for _, s in ipairs(Lighting:GetChildren()) do
-		if s:IsA("Sky") then safeDestroy(s) end
-	end
-	local sky = Instance.new("Sky")
-	sky.SkyboxBk, sky.SkyboxDn, sky.SkyboxFt = "", "", ""
-	sky.SkyboxLf, sky.SkyboxRt, sky.SkyboxUp = "", "", ""
-	sky.CelestialBodiesShown = false
-	sky.SunTextureId, sky.MoonTextureId = "", ""
-	sky.Parent = Lighting
-end
-
--- Character cleaner (keeps accessories/clothing)
+---
 local function stripCharacter(char)
 	for _, c in ipairs(char:GetChildren()) do
 		if c:IsA("Decal") or c:IsA("Texture") then
 			local ok = pcall(function() safeDestroy(c) end)
-			if not ok and c:IsA("Decal") then
+			if not ok then
 				c.Transparency = 1
-				c.Texture = ""
+				if c:IsA("Decal") then c.Texture = "" end
 			end
-		elseif c:IsA("ParticleEmitter") or c:IsA("Trail") then
+		elseif c:IsA("ParticleEmitter") or c:IsA("Trail") or c:IsA("Fire") or c:IsA("Smoke") or c:IsA("Sparkles") then
 			local ok = pcall(function() safeDestroy(c) end)
 			if not ok then
 				c.Enabled = false
-				c.Lifetime = NumberRange.new(0)
+				if c.Lifetime then c.Lifetime = NumberRange.new(0) end
+				if c.Opacity then c.Opacity = NumberSequence.new(0) end
 			end
 		end
 	end
 end
-
--- Terrain optimization (from IY)
+---
 local function optimizeTerrain()
 	local Terrain = Workspace:FindFirstChildWhichIsA("Terrain")
 	if Terrain then
@@ -56,15 +41,13 @@ local function optimizeTerrain()
 		Terrain.WaterTransparency = 1
 	end
 end
-
--- Object optimization (merged logic)
+---
 local function optimizeObject(obj)
 	if obj:IsA("BasePart") then
 		if obj.Transparency == 1 and obj.CanCollide == false then return end
 		obj.Material = Enum.Material.Plastic
 		obj.Reflectance = 0
 		obj.CastShadow = false
-		-- Make surfaces smooth
 		pcall(function()
 			obj.BackSurface = Enum.SurfaceType.SmoothNoOutlines
 			obj.BottomSurface = Enum.SurfaceType.SmoothNoOutlines
@@ -79,31 +62,66 @@ local function optimizeObject(obj)
 			obj.Transparency = 1
 			if obj:IsA("Decal") then obj.Texture = "" end
 		end
-	elseif obj:IsA("ParticleEmitter") or obj:IsA("Trail") then
-		local ok = pcall(function() safeDestroy(obj) end)
-		if not ok then
-			obj.Enabled = false
-			obj.Lifetime = NumberRange.new(0)
-		end
-	elseif obj:IsA("ForceField") or obj:IsA("Sparkles") or obj:IsA("Smoke")
-		or obj:IsA("Fire") or obj:IsA("Beam") then
-		safeDestroy(obj)
-	elseif obj:IsA("Atmosphere")
+	elseif
+		obj:IsA("Beam")
+		or obj:IsA("Explosion")
+		or obj:IsA("Fire")
+		or obj:IsA("Highlight")
+		or obj:IsA("ParticleEmitter")
+		or obj:IsA("Smoke")
+		or obj:IsA("Sparkles")
+		or obj:IsA("Trail")
+		or obj:IsA("WrapLayer")
+		or obj:IsA("WrapTarget")
+		or obj:IsA("Atmosphere")
+		or obj:IsA("Clouds")
+		or obj:IsA("Sky")
+		or obj:IsA("PointLight")
+		or obj:IsA("SpotLight")
+		or obj:IsA("SurfaceLight")
 		or obj:IsA("BloomEffect")
 		or obj:IsA("BlurEffect")
 		or obj:IsA("ColorCorrectionEffect")
 		or obj:IsA("DepthOfFieldEffect")
 		or obj:IsA("SunRaysEffect")
-		or obj:IsA("ColorGradingEffect")
-		or obj:IsA("PostEffect") then
+	then
 		local ok = pcall(function() safeDestroy(obj) end)
 		if not ok then
-			obj.Enabled = false
+			if obj:IsA("ParticleEmitter") or obj:IsA("Trail") then
+				obj.Enabled = false
+				if obj.Lifetime then obj.Lifetime = NumberRange.new(0) end
+				if obj.Opacity then obj.Opacity = NumberSequence.new(0) end
+			elseif obj:IsA("Beam") then
+				obj.Enabled = false
+				obj.Width0 = 0
+				obj.Width1 = 0
+				obj.LightEmission = 0
+			elseif obj:IsA("Explosion") then
+				obj.BlastPressure = 0
+				obj.BlastRadius = 0
+				obj.Visible = false
+			elseif obj:IsA("Fire") or obj:IsA("Smoke") or obj:IsA("Sparkles") then
+				obj.Enabled = false
+				if obj.Size then obj.Size = 0 end
+				if obj.Opacity then obj.Opacity = 0 end
+			elseif obj:IsA("Highlight") then
+				obj.Enabled = false
+				obj.FillTransparency = 1
+				obj.OutlineTransparency = 1
+			elseif obj:IsA("PointLight") or obj:IsA("SpotLight") or obj:IsA("SurfaceLight") then
+				obj.Enabled = false
+				obj.Brightness = 0
+				obj.Range = 0
+			elseif obj:IsA("Atmosphere") or obj:IsA("Clouds") or obj:IsA("Sky") then
+				obj.Parent = nil
+			elseif obj:IsA("BloomEffect") or obj:IsA("BlurEffect") or obj:IsA("ColorCorrectionEffect")
+				or obj:IsA("DepthOfFieldEffect") or obj:IsA("SunRaysEffect") then
+				obj.Enabled = false
+			end
 		end
 	end
 end
-
--- Fullbright lighting baseline
+---
 local function applyLighting()
 	Lighting.Brightness = 2
 	Lighting.ClockTime = 14
@@ -111,10 +129,8 @@ local function applyLighting()
 	Lighting.FogStart = 9e9
 	Lighting.GlobalShadows = false
 	Lighting.OutdoorAmbient = Color3.fromRGB(128, 128, 128)
-	setGraySky()
 end
-
--- Streamed optimization pass
+---
 local function streamedOptimize()
 	local all = Workspace:GetDescendants()
 	local count = 0
@@ -126,48 +142,45 @@ local function streamedOptimize()
 		end
 	end
 end
-
--- Disconnect any old loops
+---
 if brightLoop then brightLoop:Disconnect() end
-if charLoop then charLoop:Disconnect() end
-
--- Continuous lighting + terrain loop
+---
 brightLoop = RunService.RenderStepped:Connect(function()
 	applyLighting()
-	optimizeTerrain()
 end)
+---
+local function hookCharacter(char)
+	stripCharacter(char)
+	char.DescendantAdded:Connect(function(obj)
+		task.defer(function()
+			optimizeObject(obj)
+		end)
+	end)
+end
 
--- Continuous character cleanup
-charLoop = RunService.RenderStepped:Connect(function()
-	for _, plr in ipairs(Players:GetPlayers()) do
-		if plr.Character then
-			stripCharacter(plr.Character)
-		end
-	end
-end)
-
--- Hooks for new objects
+for _, plr in ipairs(Players:GetPlayers()) do
+	if plr.Character then hookCharacter(plr.Character) end
+	plr.CharacterAdded:Connect(hookCharacter)
+end
 Players.PlayerAdded:Connect(function(plr)
-	plr.CharacterAdded:Connect(stripCharacter)
+	plr.CharacterAdded:Connect(hookCharacter)
 end)
-
+---
 Workspace.DescendantAdded:Connect(function(obj)
 	task.defer(function()
 		optimizeObject(obj)
 	end)
 end)
-
+---
 Lighting.ChildAdded:Connect(function(obj)
-	if obj:IsA("Sky") then
+	if obj:IsA("Sky") or obj:IsA("Atmosphere") or obj:IsA("Clouds") then
 		safeDestroy(obj)
-		setGraySky()
-	elseif obj:IsA("PostEffect") or obj:IsA("Atmosphere") then
+	elseif obj:IsA("PostEffect") then
 		local ok = pcall(function() safeDestroy(obj) end)
 		if not ok then obj.Enabled = false end
 	end
 end)
-
--- Initial pass
+---
 applyLighting()
 optimizeTerrain()
 streamedOptimize()
