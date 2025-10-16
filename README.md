@@ -13,7 +13,3 @@
 ```lua
 loadstring(game:HttpGet("https://raw.githubusercontent.com/RiseBlox/MyHub/refs/heads/main/MyHub.lua", true))()
 ```
-
-<!--
-<img width="504" height="392" alt="image" src="https://github.com/user-attachments/assets/31319f44-ab4e-4dd5-b180-933770411684" />
---!>
