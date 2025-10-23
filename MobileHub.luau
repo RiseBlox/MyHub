@@ -152,6 +152,23 @@ unTab:Button({
 })
 ---
 jbTab:Separator({
+	Text = "Other"
+})
+jbTab:Button({
+	Text = "antiRagdoll",
+	Callback = function()
+		require(game:GetService("ReplicatedStorage").Game.Paraglide).IsFlying = function()
+        	return tostring(getfenv(2).script) == "Falling"
+        end
+	end
+})
+jbTab:Button({
+	Text = "Hypershift (Client-sided)",
+	Callback = function()
+		loadstring(game:HttpGet("https://raw.githubusercontent.com/beeatomic/respawn-fix-universal-farm/main/hypershift.lua", true))()
+	end
+})
+jbTab:Separator({
 	Text = "Project Auto"
 })
 jbTab:Button({
@@ -182,7 +199,7 @@ jbTab:Button({
 	end
 })
 jbTab:Separator({
-	Text = "Other"
+	Text = "Other 2"
 })
 jbTab:Button({
 	Text = "Sensation",
@@ -190,6 +207,25 @@ jbTab:Button({
 		loadstring(game:HttpGet("https://api.luarmor.net/files/v3/loaders/730854e5b6499ee91deb1080e8e12ae3.lua", true))()
 	end
 })
+jbTab:Button({
+	Text = "Veriax",
+	Callback = function()
+		loadstring(game:HttpGet("https://raw.githubusercontent.com/KuriWasTaken/Veriax/main/Verisions/1.1/Scripts/Jailbreak.lua", true))()
+	end
+})
+jbTab:Button({
+	Text = "Autofarm",
+	Callback = function()
+		loadstring(game:HttpGet("https://raw.githubusercontent.com/beeatomic/alpha/main/autofarm-obfuscated.lua", true))()
+	end
+})
+--jbTab:Button({
+--	Text = "PXSTA Hack",
+--	Callback = function()
+--		getgenv().GuiUsePlayer = true
+--        loadstring(game:HttpGet("https://scripts.projectauto.xyz/PxstaHackV7", true))()
+--	end
+--})
 --jbTab:Button({
 --	Text = "Solix Hub",
 --	Callback = function()
@@ -200,13 +236,6 @@ jbTab:Button({
 --	Text = "Codecoat",
 --	Callback = function()
 --		loadstring(game:HttpGet("https://raw.githubusercontent.com/Breadido/Codecoat/refs/heads/main/looder.luau",true))()
---	end
---})
---jbTab:Button({
---	Text = "PXSTA Hack",
---	Callback = function()
---		getgenv().GuiUsePlayer = true
---        loadstring(game:HttpGet("https://scripts.projectauto.xyz/PxstaHackV7", true))()
 --	end
 --})
 ---
