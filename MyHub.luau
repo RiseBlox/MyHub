@@ -42,13 +42,15 @@ unTab:Button({
 	Callback = function()
 		local synsaveinstance = loadstring(game:HttpGet("https://raw.githubusercontent.com/verysigmapro/UniversalSynSaveInstance-With-Save-Terrain/refs/heads/main/saveinstance_rewrite.luau", true), "saveinstance")();
 		local SaveinstanceOptions = {
-			usekonstantdecompiler = false,
+			usekonstantdecompiler = true,
 			ReadMe = false,
 			SafeMode = true,
+			ShutdownWhenDone = true,
+			AntiIdle = true,
+			mode = "full",
 			timeout = -1,
 			SaveBytecode = true,
-			AntiIdle = true,
-			mode = "full"
+			TreatUnionsAsParts = true
 		}
 		synsaveinstance(SaveinstanceOptions);
 	end

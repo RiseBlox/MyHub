@@ -1,6 +1,6 @@
 local ReGui = loadstring(game:HttpGet("https://raw.githubusercontent.com/depthso/Dear-ReGui/refs/heads/main/ReGui.lua", true))()
 local Window = ReGui:TabsWindow({
-	Title = "MyHub V2 - Mobile",
+	Title = "MyHub V2",
 	Size = UDim2.fromOffset(322, 197),
 	NoGradients = true,
 	BackgroundTransparency = 100
@@ -42,13 +42,15 @@ unTab:Button({
 	Callback = function()
 		local synsaveinstance = loadstring(game:HttpGet("https://raw.githubusercontent.com/verysigmapro/UniversalSynSaveInstance-With-Save-Terrain/refs/heads/main/saveinstance_rewrite.luau", true), "saveinstance")();
 		local SaveinstanceOptions = {
-			usekonstantdecompiler = false,
+			usekonstantdecompiler = true,
 			ReadMe = false,
 			SafeMode = true,
+			ShutdownWhenDone = true,
+			AntiIdle = true,
+			mode = "full",
 			timeout = -1,
 			SaveBytecode = true,
-			AntiIdle = true,
-			mode = "full"
+			TreatUnionsAsParts = true
 		}
 		synsaveinstance(SaveinstanceOptions);
 	end
