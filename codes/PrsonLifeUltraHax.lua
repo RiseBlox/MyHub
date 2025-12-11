@@ -272,6 +272,7 @@ for _, info in ipairs(Buttons) do
 	btn.MouseButton1Click:Connect(function()
 		if info.name == "GunsMod" then
             game.StarterGui:SetCore("SendNotification", {Text="Make sure you are not holding any guns!", Title="Guns Mod"})
+			wait(5)
 			for i, v in pairs(LocalPlayer.Backpack:GetChildren()) do
 				if v:GetAttribute("FireRate") ~= nil then
 					v:SetAttribute("FireRate", 0.02)
