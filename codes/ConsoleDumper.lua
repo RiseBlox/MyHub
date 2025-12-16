@@ -1,5 +1,6 @@
 local logHistory = game:GetService("LogService"):GetLogHistory()
 local allMessages = ""
+
 for _, logEntry in ipairs(logHistory) do
     local message = ""
     if logEntry.messageType == Enum.MessageType.MessageError then
@@ -14,6 +15,6 @@ for _, logEntry in ipairs(logHistory) do
     end
         allMessages = allMessages .. message .. "\n"
 end
--- Save log to a file
+
 writefile(identifyexecutor() .. ".txt", allMessages)
-game.StarterGui:SetCore("SendNotification", {Text="Console saved to file!", Title="Log Dumper"})
+game.StarterGui:SetCore("SendNotification", {Text="Console saved to file!", Title="Console Dumper"})

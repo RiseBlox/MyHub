@@ -49,4 +49,4 @@ if antiFallEnabled then
     characterAddedConnection = lp.CharacterAdded:Connect(protect)
 end
 
-Message("Anti Fall Damage", "Enabled!", 5)
+Message("NDS Anti Fall Damage", "Successfully loaded!", 5)

@@ -446,3 +446,4 @@ do
 
 	ContextActionService:BindActionAtPriority("FreecamToggle", HandleActivationInput, false, TOGGLE_INPUT_PRIORITY, FREECAM_MACRO_KB[#FREECAM_MACRO_KB])
 end
+game.StarterGui:SetCore("SendNotification", {Text="Successfully enabled!", Title="Freecam"})

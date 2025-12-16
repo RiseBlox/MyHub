@@ -5,6 +5,8 @@ _G.WRDESPTeamColors = true --Distinguish different teams by their team color.
 _G.WRDESPTracers = false --Display lines leading to other players.
 _G.WRDESPNames = false --Display the names of the other players.
 
+game.StarterGui:SetCore("SendNotification", {Text="Successfully loaded!", Title="WRD ESP"})
+
 -- WARNING: Edit anything below this point may break the script!
 
 if not _G.WRDESPLoaded then    

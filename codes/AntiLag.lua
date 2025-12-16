@@ -7,19 +7,11 @@ local Lighting = game:GetService("Lighting")
 local Workspace = game:GetService("Workspace")
 local RunService = game:GetService("RunService")
 
-------------------------------------------------------------------
--- UTILITIES
-------------------------------------------------------------------
-
 local function safeDestroy(obj)
     if obj and obj.Destroy then
         pcall(function() obj:Destroy() end)
     end
 end
-
-------------------------------------------------------------------
--- LIGHTING (one-time, not per-frame)
-------------------------------------------------------------------
 
 local function hardLighting()
     Lighting.Brightness = 2
@@ -35,10 +27,6 @@ Lighting.Changed:Connect(function()
 end)
 
 hardLighting()
-
-------------------------------------------------------------------
--- CHARACTER OPTIMIZATION (NO DECAL/TEXTURE REMOVAL)
-------------------------------------------------------------------
 
 local EFFECT_CLASSES = {
     ParticleEmitter = true,
@@ -74,10 +62,6 @@ end
 Players.PlayerAdded:Connect(function(plr)
     plr.CharacterAdded:Connect(cleanCharacter)
 end)
-
-------------------------------------------------------------------
--- ENVIRONMENT OPTIMIZATION (BATCHED, DECALS/TEXTURES SAFE)
-------------------------------------------------------------------
 
 local function batchOptimize()
     local targetClasses = {
@@ -120,10 +104,6 @@ end
 
 task.spawn(batchOptimize)
 
-------------------------------------------------------------------
--- TERRAIN STREAMLINING
-------------------------------------------------------------------
-
 local Terrain = Workspace:FindFirstChildWhichIsA("Terrain")
 if Terrain then
     Terrain.WaterWaveSize = 0
@@ -132,10 +112,6 @@ if Terrain then
     Terrain.WaterTransparency = 1
 end
 
-------------------------------------------------------------------
--- LIGHTING OVERRIDE FOR NEW CHILDREN
-------------------------------------------------------------------
-
 Lighting.ChildAdded:Connect(function(obj)
     if obj:IsA("Sky") or obj:IsA("Atmosphere") or obj:IsA("Clouds") then
         safeDestroy(obj)
@@ -143,3 +119,4 @@ Lighting.ChildAdded:Connect(function(obj)
         safeDestroy(obj)
     end
 end)
+game.StarterGui:SetCore("SendNotification", {Text="Successfully loaded!", Title="Anti Lag"})

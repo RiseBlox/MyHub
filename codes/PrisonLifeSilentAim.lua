@@ -588,8 +588,8 @@ end)
 
 pcall(function()
     StarterGui:SetCore("SendNotification", {
-        Title = "Silent Aim",
-        Text = "Loaded!",
+        Title = "Prison Life Silent Aim",
+        Text = "Successfully loaded!",
         Duration = 5,
     })
 end)

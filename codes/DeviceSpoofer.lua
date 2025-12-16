@@ -30,3 +30,4 @@ index = hookmetamethod(game, "__index", function(tbl, idx)
     end
     return index(tbl, idx);
 end);
+game.StarterGui:SetCore("SendNotification", {Text="Successfully spoofed!", Title="Device Spoofer"})

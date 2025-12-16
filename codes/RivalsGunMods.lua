@@ -9,3 +9,5 @@ end
 toggleTableAttribute("ShootCooldown", 0)
 toggleTableAttribute("ShootSpread", 0)
 toggleTableAttribute("ShootRecoil", 0)
+
+game.StarterGui:SetCore("SendNotification", {Text="Successfully loaded!", Title="Rivals Gun Mods"})

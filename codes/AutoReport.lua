@@ -18,3 +18,4 @@ while getgenv().enabled do
         end
     end
 end
+game.StarterGui:SetCore("SendNotification", {Text="Successfully reported!", Title="Auto Report"})
