@@ -10,25 +10,35 @@ local RunService = game:GetService("RunService")
 local player = Players.LocalPlayer
 local camera = Workspace.CurrentCamera
 
-local HEIGHT_OFFSET = 180
-local FAST_WAIT = 0.03
-local SMOOTH_TWEEN = 0.18
-local CHUNK_SIZE = 520
-local PERIMETER_RADIUS = 420
+local HEIGHT_OFFSET = 220
+local FAST_WAIT = 0.02
+local SMOOTH_TWEEN = 0.22
+local POST_TWEEN_WAIT = 0.03
+local CHUNK_SIZE = 700
+local PERIMETER_RADIUS = 750
 
 local running = false
 local stopRequested = false
+local minimized = false
 local originalCFrame
 local originalCameraType
-local guiRef
 
-local fps = 60
-RunService.RenderStepped:Connect(function(dt)
-	fps = 1 / math.max(dt, 1e-4)
-end)
+local gui
+local frame
+local content
+local progressFill
+local progressText
+local barBg
+local actionBtn
 
 local function setRendering(on)
 	RunService:Set3dRenderingEnabled(on)
+end
+
+local function restoreCamera()
+	setRendering(true)
+	if originalCameraType then camera.CameraType = originalCameraType end
+	if originalCFrame then camera.CFrame = originalCFrame end
 end
 
 local function formatETA(startTime, done, total)
@@ -37,6 +47,14 @@ local function formatETA(startTime, done, total)
 	local remaining = math.max(0, total - done)
 	local eta = math.floor(avg * remaining)
 	return string.format("%02d:%02d", math.floor(eta / 60), eta % 60)
+end
+
+local function setProgress(alpha, text, active)
+	progressFill.Size = UDim2.new(math.clamp(alpha, 0, 1), 0, 1, 0)
+	progressText.Text = text or ""
+	barBg.BackgroundColor3 = active
+		and Color3.fromRGB(45,45,45)
+		or Color3.fromRGB(55,55,55)
 end
 
 local function collectParts()
@@ -80,159 +98,177 @@ local function tweenTo(pos)
 	)
 	tween:Play()
 	tween.Completed:Wait()
+	task.wait(POST_TWEEN_WAIT)
 end
 
-local function hardStop()
-	stopRequested = true
-	running = false
-	setRendering(true)
-	if originalCameraType then
-		camera.CameraType = originalCameraType
-	end
-	if originalCFrame then
-		camera.CFrame = originalCFrame
-	end
-	if guiRef then
-		guiRef:Destroy()
-	end
-end
+local function runLoader()
+	running = true
+	stopRequested = false
 
-local function runLoader(status)
-	status.Text = "Scanning map…"
+	originalCFrame = camera.CFrame
+	originalCameraType = camera.CameraType
+	camera.CameraType = Enum.CameraType.Scriptable
+
+	actionBtn.Text = "Stop"
+	actionBtn.BackgroundColor3 = Color3.fromRGB(170,0,0)
+
 	local parts = collectParts()
 	if #parts == 0 then
-		status.Text = "No geometry found"
+		restoreCamera()
+		running = false
 		return
 	end
 
 	local centers = buildCenters(parts)
-	local centerCount = #centers
-
-	camera.CameraType = Enum.CameraType.Scriptable
 
 	-- PHASE 1
 	setRendering(false)
 	local start1 = tick()
 
 	for i, center in ipairs(centers) do
-		if stopRequested then return end
+		if stopRequested then
+			restoreCamera()
+			running = false
+			return
+		end
+
 		camera.CFrame = CFrame.new(center + Vector3.new(0, HEIGHT_OFFSET, 0))
 		task.wait(FAST_WAIT)
 
-		status.Text = string.format(
-			"Phase 1 %d/%d | ETA %s | FPS %d",
-			i, centerCount,
-			formatETA(start1, i, centerCount),
-			fps
+		setProgress(
+			i / #centers,
+			string.format("%d/%d | ETA %s", i, #centers, formatETA(start1, i, #centers)),
+			true
 		)
 	end
 
 	setRendering(true)
 
 	-- PHASE 2
+	local r = PERIMETER_RADIUS
 	local offsets = {
 		Vector3.zero,
-		Vector3.new(PERIMETER_RADIUS,0,0),
-		Vector3.new(-PERIMETER_RADIUS,0,0),
-		Vector3.new(0,0,PERIMETER_RADIUS),
-		Vector3.new(0,0,-PERIMETER_RADIUS)
+		Vector3.new( r,0,0), Vector3.new(-r,0,0),
+		Vector3.new(0,0, r), Vector3.new(0,0,-r),
+		Vector3.new( r,0, r), Vector3.new(-r,0, r),
+		Vector3.new( r,0,-r), Vector3.new(-r,0,-r)
 	}
 
-	local totalSteps = centerCount * #offsets
+	local total = #centers * #offsets
 	local step = 0
 	local start2 = tick()
 
 	for _, center in ipairs(centers) do
 		for _, off in ipairs(offsets) do
-			if stopRequested then return end
+			if stopRequested then
+				restoreCamera()
+				running = false
+				return
+			end
+
 			step += 1
 			tweenTo(center + off + Vector3.new(0, HEIGHT_OFFSET, 0))
 
-			status.Text = string.format(
-				"Phase 2 %d/%d | ETA %s | FPS %d",
-				step, totalSteps,
-				formatETA(start2, step, totalSteps),
-				fps
+			setProgress(
+				step / total,
+				string.format("%d/%d | ETA %s", step, total, formatETA(start2, step, total)),
+				true
 			)
 		end
 	end
+
+	restoreCamera()
+	gui:Destroy()
 end
 
-local function createGui()
-	local gui = Instance.new("ScreenGui", player.PlayerGui)
-	gui.Name = "SmoothMapLoader"
-	gui.ResetOnSpawn = false
-	guiRef = gui
+gui = Instance.new("ScreenGui", player.PlayerGui)
+gui.Name = "MapLoader"
+gui.ResetOnSpawn = false
 
-	local frame = Instance.new("Frame", gui)
-	frame.Size = UDim2.new(0, 360, 0, 200)
-	frame.Position = UDim2.new(0.5, -180, 0.5, -100)
-	frame.BackgroundColor3 = Color3.fromRGB(25,25,25)
-	frame.Active = true
-	frame.Draggable = true
+frame = Instance.new("Frame", gui)
+frame.Size = UDim2.new(0, 300, 0, 150)
+frame.Position = UDim2.new(0.5, -150, 0.5, -75)
+frame.BackgroundColor3 = Color3.fromRGB(25,25,25)
+frame.Active = true
+frame.Draggable = true
 
-	local title = Instance.new("TextLabel", frame)
-	title.Size = UDim2.new(1, -36, 0, 36)
-	title.BackgroundColor3 = Color3.fromRGB(45,45,45)
-	title.Text = "Map Loader"
-	title.TextColor3 = Color3.new(1,1,1)
-	title.Font = Enum.Font.SourceSansBold
-	title.TextSize = 17
+local title = Instance.new("TextLabel", frame)
+title.Size = UDim2.new(1, 0, 0, 32)
+title.BackgroundTransparency = 1
+title.Text = "MapLoader"
+title.Font = Enum.Font.SourceSansBold
+title.TextSize = 16
+title.TextColor3 = Color3.new(1,1,1)
+title.TextXAlignment = Enum.TextXAlignment.Center
 
-	local close = Instance.new("TextButton", frame)
-	close.Size = UDim2.new(0, 36, 0, 36)
-	close.Position = UDim2.new(1, -36, 0, 0)
-	close.Text = "X"
-	close.Font = Enum.Font.SourceSansBold
-	close.TextSize = 18
-	close.TextColor3 = Color3.new(1,1,1)
-	close.BackgroundColor3 = Color3.fromRGB(140, 40, 40)
+local minimize = Instance.new("TextButton", frame)
+minimize.Size = UDim2.new(0, 32, 0, 32)
+minimize.Position = UDim2.new(1, -32, 0, 0)
+minimize.Text = "-"
+minimize.Font = Enum.Font.SourceSansBold
+minimize.TextSize = 24
+minimize.TextColor3 = Color3.new(1,1,1)
+minimize.BackgroundTransparency = 1
 
-	close.MouseButton1Click:Connect(hardStop)
+content = Instance.new("Frame", frame)
+content.Position = UDim2.new(0,0,0,32)
+content.Size = UDim2.new(1,0,1,-32)
+content.BackgroundTransparency = 1
 
-	local status = Instance.new("TextLabel", frame)
-	status.Size = UDim2.new(1, -20, 0, 40)
-	status.Position = UDim2.new(0,10,0,60)
-	status.BackgroundTransparency = 1
-	status.TextWrapped = true
-	status.TextColor3 = Color3.new(1,1,1)
-	status.Text = "Idle"
+barBg = Instance.new("Frame", content)
+barBg.Size = UDim2.new(0.9,0,0,18)
+barBg.Position = UDim2.new(0.05,0,0,20)
+barBg.BackgroundColor3 = Color3.fromRGB(55,55,55)
 
-	local startBtn = Instance.new("TextButton", frame)
-	startBtn.Size = UDim2.new(0.8,0,0,36)
-	startBtn.Position = UDim2.new(0.1,0,0,120)
-	startBtn.Text = "Start Full Load"
-	startBtn.BackgroundColor3 = Color3.fromRGB(0,170,0)
-	startBtn.TextColor3 = Color3.new(1,1,1)
+progressFill = Instance.new("Frame", barBg)
+progressFill.Size = UDim2.new(0,0,1,0)
+progressFill.BackgroundColor3 = Color3.fromRGB(0,170,0)
 
-	local stopBtn = Instance.new("TextButton", frame)
-	stopBtn.Size = UDim2.new(0.8,0,0,34)
-	stopBtn.Position = UDim2.new(0.1,0,0,160)
-	stopBtn.Text = "Stop"
-	stopBtn.Visible = false
-	stopBtn.BackgroundColor3 = Color3.fromRGB(170,0,0)
-	stopBtn.TextColor3 = Color3.new(1,1,1)
+progressText = Instance.new("TextLabel", barBg)
+progressText.Size = UDim2.new(1,0,1,0)
+progressText.BackgroundTransparency = 1
+progressText.Text = "Idle"
+progressText.Font = Enum.Font.SourceSansBold
+progressText.TextSize = 14
+progressText.TextColor3 = Color3.new(1,1,1)
 
-	startBtn.MouseButton1Click:Connect(function()
-		if running then return end
-		running = true
-		stopRequested = false
+actionBtn = Instance.new("TextButton", content)
+actionBtn.Size = UDim2.new(0.8,0,0,32)
+actionBtn.Position = UDim2.new(0.1,0,0,60)
+actionBtn.Text = "Start"
+actionBtn.Font = Enum.Font.SourceSansBold
+actionBtn.TextSize = 16
+actionBtn.BackgroundColor3 = Color3.fromRGB(0,170,0)
+actionBtn.TextColor3 = Color3.new(1,1,1)
 
-		originalCFrame = camera.CFrame
-		originalCameraType = camera.CameraType
-
-		startBtn.Visible = false
-		stopBtn.Visible = true
-
-		runLoader(status)
-
-		hardStop()
-	end)
-
-	stopBtn.MouseButton1Click:Connect(function()
+actionBtn.MouseButton1Click:Connect(function()
+	if running then
 		stopRequested = true
-	end)
-end
+		restoreCamera()
+		running = false
+		actionBtn.Text = "Start"
+		actionBtn.BackgroundColor3 = Color3.fromRGB(0,170,0)
+		setProgress(0, "Idle", false)
+	else
+		task.spawn(runLoader)
+	end
+end)
 
-createGui()
+minimize.MouseButton1Click:Connect(function()
+	minimized = not minimized
+	content.Visible = not minimized
+
+	if minimized then
+		frame.Active = false
+		frame.Draggable = false
+		frame.Size = UDim2.new(0, 220, 0, 32)
+		frame.Position = UDim2.new(0, 10, 1, -42)
+	else
+		frame.Active = true
+		frame.Draggable = true
+		frame.Size = UDim2.new(0, 300, 0, 150)
+		frame.Position = UDim2.new(0.5, -150, 0.5, -75)
+	end
+end)
+
 game.StarterGui:SetCore("SendNotification", {Text="Successfully loaded!", Title="Map Loader"})
