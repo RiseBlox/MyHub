@@ -1,111 +1,123 @@
-local Players = game:GetService("Players")
-local LocalPlayer = Players.LocalPlayer
-local RunService = game:GetService("RunService")
-local UserInputService = game:GetService("UserInputService")
-local ReplicatedStorage = game:GetService("ReplicatedStorage")
-local StarterGui = game:GetService("StarterGui")
-local TweenService = game:GetService("TweenService")
-local CoreGui = game:GetService("CoreGui")
-local GuiService = game:GetService("GuiService")
-local Teams = game:GetService("Teams")
+local plrs = game:GetService("Players")
+local me = plrs.LocalPlayer
+local rs = game:GetService("RunService")
+local uis = game:GetService("UserInputService")
+local rep = game:GetService("ReplicatedStorage")
+local startergui = game:GetService("StarterGui")
+local ts = game:GetService("TweenService")
+local coregui = game:GetService("CoreGui")
+local guiservice = game:GetService("GuiService")
+local teams = game:GetService("Teams")
 
-local Settings = {
-    Enabled = true,
-    TeamCheck = true,
-    WallCheck = true,
-    DeathCheck = true,
-    ForceFieldCheck = true,
-    HostileCheck = true,
-    TrespassingCheck = true,
-    VehicleCheck = true,
-    TaserBypassHostile = true,
-    TaserBypassTrespassing = true,
-    TaserAlwaysHit = true,
-    IfPlayerIsStill = true,
-    StationaryThreshold = 0.5,
-    HitChance = 100,
-    MissSpread = 0,
-    FOV = 150,
-    ShowFOV = true,
-    ShowTargetLine = false,
-    AimPart = "Head",
-    RandomAimParts = false,
-    AimPartsList = {"Torso", "HumanoidRootPart", "LeftArm", "RightArm"},
-    ESPEnabled = true,
-    ESPTeamCheck = true,
-    ESPTargets = {
-        Guards = true,
-        Inmates = true,
-        Criminals = true
-    },
-    ESPMaxDistance = 500,
-    ESPShowDistance = true,
-    ESPColor = Color3.fromRGB(0, 170, 255),
-    ESPGuardsColor = Color3.fromRGB(0, 170, 255),
-    ESPInmatesColor = Color3.fromRGB(255, 150, 50),
-    ESPCriminalsColor = Color3.fromRGB(255, 60, 60),
-    ESPTeamColor = Color3.fromRGB(60, 255, 60),
-    ESPUseTeamColors = true
+local cfg = {
+    enabled = true,
+    teamcheck = true,
+    wallcheck = false,
+    deathcheck = true,
+    ffcheck = true,
+    hostilecheck = true,
+    trespasscheck = true,
+    vehiclecheck = false,
+    taserbypasshostile = true,
+    taserbypasstrespass = true,
+    taseralwayshit = true,
+    ifplayerstill = true,
+    stillthreshold = 0.5,
+    hitchance = 100,
+    missspread = 0,
+    shotgunnaturalspread = false,
+    prioritizeclosest = true,
+    fov = 150,
+    showfov = true,
+    showtargetline = false,
+    aimpart = "Head",
+    randomparts = false,
+    partslist = {"Torso", "HumanoidRootPart", "LeftArm", "RightArm"},
+    esp = true,
+    espteamcheck = true,
+    espshowteam = false,
+    esptargets = {guards = true, inmates = true, criminals = true},
+    espmaxdist = 500,
+    espshowdist = true,
+    espcolor = Color3.fromRGB(0, 170, 255),
+    espguards = Color3.fromRGB(0, 170, 255),
+    espinmates = Color3.fromRGB(255, 150, 50),
+    espcriminals = Color3.fromRGB(255, 60, 60),
+    espteam = Color3.fromRGB(60, 255, 60),
+    espuseteamcolors = true
 }
 
-local guardsTeam = Teams:FindFirstChild("Guards")
-local inmatesTeam = Teams:FindFirstChild("Inmates")
-local criminalsTeam = Teams:FindFirstChild("Criminals")
+local guardsteam = teams:FindFirstChild("Guards")
+local inmatesteam = teams:FindFirstChild("Inmates")
+local crimsteam = teams:FindFirstChild("Criminals")
 
-local WallCheckParams = RaycastParams.new()
-WallCheckParams.FilterType = Enum.RaycastFilterType.Exclude
-WallCheckParams.IgnoreWater = true
-WallCheckParams.RespectCanCollide = false
-WallCheckParams.CollisionGroup = "ClientBullet"
+local wallparams = RaycastParams.new()
+wallparams.FilterType = Enum.RaycastFilterType.Exclude
+wallparams.IgnoreWater = true
+wallparams.RespectCanCollide = false
+wallparams.CollisionGroup = "ClientBullet"
 
-local CurrentGun = nil
+local currentgun = nil
+local rng = Random.new()
+local lastshottime = 0
+local lastshotresult = false
+local shotcooldown = 0.15
 
-local fov_circle = Drawing.new("Circle")
-fov_circle.Color = Color3.fromRGB(255, 0, 0)
-fov_circle.Radius = Settings.FOV
-fov_circle.Transparency = 0.8
-fov_circle.Filled = false
-fov_circle.NumSides = 64
-fov_circle.Thickness = 1
-fov_circle.Visible = Settings.ShowFOV and Settings.Enabled
+local fovcircle = Drawing.new("Circle")
+fovcircle.Color = Color3.fromRGB(255, 0, 0)
+fovcircle.Radius = cfg.fov
+fovcircle.Transparency = 0.8
+fovcircle.Filled = false
+fovcircle.NumSides = 64
+fovcircle.Thickness = 1
+fovcircle.Visible = cfg.showfov and cfg.enabled
 
-local target_line = Drawing.new("Line")
-target_line.Color = Color3.fromRGB(0, 255, 0)
-target_line.Thickness = 1
-target_line.Transparency = 0.5
-target_line.Visible = false
+local targetline = Drawing.new("Line")
+targetline.Color = Color3.fromRGB(0, 255, 0)
+targetline.Thickness = 1
+targetline.Transparency = 0.5
+targetline.Visible = false
 
-local Visuals = { Gui = nil }
-local ESPCache = {}
+local visuals = {gui = nil}
+local espcache = {}
 
-local function CreateVisuals()
+local function makevisuals()
     local sg = Instance.new("ScreenGui")
     sg.Name = "SilentAimESP"
     sg.ResetOnSpawn = false
     sg.IgnoreGuiInset = true
-    pcall(function() sg.Parent = CoreGui end)
-    if not sg.Parent then sg.Parent = LocalPlayer:WaitForChild("PlayerGui") end
-    Visuals.Gui = sg
+
+    if syn and syn.protect_gui then
+        syn.protect_gui(sg)
+        sg.Parent = coregui
+    elseif gethui then
+        sg.Parent = gethui()
+    else
+        sg.Parent = coregui
+    end
+
+    if not sg.Parent then sg.Parent = me:WaitForChild("PlayerGui") end
+    visuals.gui = sg
 end
 
-local function CreateESPMarker(player)
-    if ESPCache[player] then return ESPCache[player] end
+local function makeesp(plr)
+    if espcache[plr] then return espcache[plr] end
 
-    local espGui = Instance.new("BillboardGui")
-    espGui.Name = "ESP_" .. player.Name
-    espGui.AlwaysOnTop = true
-    espGui.Size = UDim2.new(0, 20, 0, 20)
-    espGui.StudsOffset = Vector3.new(0, 3, 0)
-    espGui.LightInfluence = 0
+    local esp = Instance.new("BillboardGui")
+    esp.Name = "ESP_" .. plr.Name
+    esp.AlwaysOnTop = true
+    esp.Size = UDim2.new(0, 20, 0, 20)
+    esp.StudsOffset = Vector3.new(0, 3, 0)
+    esp.LightInfluence = 0
 
     local diamond = Instance.new("Frame")
     diamond.Name = "Diamond"
-    diamond.BackgroundColor3 = Settings.ESPColor
+    diamond.BackgroundColor3 = cfg.espcolor
     diamond.BorderSizePixel = 0
     diamond.Size = UDim2.new(0, 10, 0, 10)
     diamond.Position = UDim2.new(0.5, -5, 0.5, -5)
     diamond.Rotation = 45
-    diamond.Parent = espGui
+    diamond.Parent = esp
 
     local stroke = Instance.new("UIStroke")
     stroke.Color = Color3.new(0, 0, 0)
@@ -113,135 +125,129 @@ local function CreateESPMarker(player)
     stroke.Transparency = 0.3
     stroke.Parent = diamond
 
-    local distLabel = Instance.new("TextLabel")
-    distLabel.Name = "DistanceLabel"
-    distLabel.BackgroundTransparency = 1
-    distLabel.Size = UDim2.new(0, 60, 0, 16)
-    distLabel.Position = UDim2.new(0.5, -30, 1, 2)
-    distLabel.Font = Enum.Font.GothamBold
-    distLabel.TextSize = 11
-    distLabel.TextColor3 = Color3.new(1, 1, 1)
-    distLabel.TextStrokeTransparency = 0.5
-    distLabel.TextStrokeColor3 = Color3.new(0, 0, 0)
-    distLabel.Text = ""
-    distLabel.Parent = espGui
+    local dist = Instance.new("TextLabel")
+    dist.Name = "DistanceLabel"
+    dist.BackgroundTransparency = 1
+    dist.Size = UDim2.new(0, 60, 0, 16)
+    dist.Position = UDim2.new(0.5, -30, 1, 2)
+    dist.Font = Enum.Font.GothamBold
+    dist.TextSize = 11
+    dist.TextColor3 = Color3.new(1, 1, 1)
+    dist.TextStrokeTransparency = 0.5
+    dist.TextStrokeColor3 = Color3.new(0, 0, 0)
+    dist.Text = ""
+    dist.Parent = esp
 
-    local nameLabel = Instance.new("TextLabel")
-    nameLabel.Name = "NameLabel"
-    nameLabel.BackgroundTransparency = 1
-    nameLabel.Size = UDim2.new(0, 100, 0, 14)
-    nameLabel.Position = UDim2.new(0.5, -50, 0, -16)
-    nameLabel.Font = Enum.Font.GothamBold
-    nameLabel.TextSize = 10
-    nameLabel.TextColor3 = Color3.new(1, 1, 1)
-    nameLabel.TextStrokeTransparency = 0.5
-    nameLabel.TextStrokeColor3 = Color3.new(0, 0, 0)
-    nameLabel.Text = player.Name
-    nameLabel.Parent = espGui
+    local namelbl = Instance.new("TextLabel")
+    namelbl.Name = "NameLabel"
+    namelbl.BackgroundTransparency = 1
+    namelbl.Size = UDim2.new(0, 100, 0, 14)
+    namelbl.Position = UDim2.new(0.5, -50, 0, -16)
+    namelbl.Font = Enum.Font.GothamBold
+    namelbl.TextSize = 10
+    namelbl.TextColor3 = Color3.new(1, 1, 1)
+    namelbl.TextStrokeTransparency = 0.5
+    namelbl.TextStrokeColor3 = Color3.new(0, 0, 0)
+    namelbl.Text = plr.Name
+    namelbl.Parent = esp
 
-    ESPCache[player] = espGui
-    return espGui
+    espcache[plr] = esp
+    return esp
 end
 
-local function RemoveESPMarker(player)
-    local esp = ESPCache[player]
-    if esp then
-        esp:Destroy()
-        ESPCache[player] = nil
-    end
+local function removeesp(plr)
+    local e = espcache[plr]
+    if e then e:Destroy() espcache[plr] = nil end
 end
 
-local function ShouldShowESP(player)
-    if not player or player == LocalPlayer then return false end
-    if not player.Character then return false end
+local function shouldshowesp(plr)
+    if not plr or plr == me or not plr.Character then return false end
 
-    local humanoid = player.Character:FindFirstChildOfClass("Humanoid")
-    if not humanoid or humanoid.Health <= 0 then return false end
+    local hum = plr.Character:FindFirstChildOfClass("Humanoid")
+    if not hum or hum.Health <= 0 then return false end
 
-    local hrp = player.Character:FindFirstChild("HumanoidRootPart")
+    local hrp = plr.Character:FindFirstChild("HumanoidRootPart")
     if not hrp then return false end
 
-    local myChar = LocalPlayer.Character
-    if not myChar then return false end
-    local myHRP = myChar:FindFirstChild("HumanoidRootPart")
-    if not myHRP then return false end
+    local mychar = me.Character
+    if not mychar then return false end
+    local myhrp = mychar:FindFirstChild("HumanoidRootPart")
+    if not myhrp then return false end
 
-    local distance = (hrp.Position - myHRP.Position).Magnitude
-    if distance > Settings.ESPMaxDistance then return false end
+    local dist = (hrp.Position - myhrp.Position).Magnitude
+    if dist > cfg.espmaxdist then return false end
 
-    local myTeam = LocalPlayer.Team
-    local theirTeam = player.Team
+    local myteam = me.Team
+    local theirteam = plr.Team
 
-    if theirTeam == myTeam then return false end
-
-    if Settings.ESPTeamCheck then
-        local iAmCriminalOrInmate = (myTeam == criminalsTeam or myTeam == inmatesTeam)
-        local theyAreCriminalOrInmate = (theirTeam == criminalsTeam or theirTeam == inmatesTeam)
-        if iAmCriminalOrInmate and theyAreCriminalOrInmate then return false end
+    if theirteam == myteam then
+        if not cfg.espshowteam then return false end
+        return true
     end
 
-    if theirTeam == guardsTeam then return Settings.ESPTargets.Guards
-    elseif theirTeam == inmatesTeam then return Settings.ESPTargets.Inmates
-    elseif theirTeam == criminalsTeam then return Settings.ESPTargets.Criminals
+    if cfg.espteamcheck then
+        local imcrimorinmate = (myteam == crimsteam or myteam == inmatesteam)
+        local theycrimorinmate = (theirteam == crimsteam or theirteam == inmatesteam)
+        if imcrimorinmate and theycrimorinmate then return false end
     end
+
+    if theirteam == guardsteam then return cfg.esptargets.guards
+    elseif theirteam == inmatesteam then return cfg.esptargets.inmates
+    elseif theirteam == crimsteam then return cfg.esptargets.criminals end
 
     return false
 end
 
-local function UpdateESP()
-    if not Settings.ESPEnabled or not Visuals.Gui then
-        for _, esp in pairs(ESPCache) do esp.Parent = nil end
+local function updateesp()
+    if not cfg.esp or not visuals.gui then
+        for _, e in pairs(espcache) do e.Parent = nil end
         return
     end
 
-    local myChar = LocalPlayer.Character
-    local myHRP = myChar and myChar:FindFirstChild("HumanoidRootPart")
+    local mychar = me.Character
+    local myhrp = mychar and mychar:FindFirstChild("HumanoidRootPart")
 
-    for _, player in ipairs(Players:GetPlayers()) do
-        local shouldShow = ShouldShowESP(player)
+    for _, plr in ipairs(plrs:GetPlayers()) do
+        local show = shouldshowesp(plr)
 
-        if shouldShow then
-            local char = player.Character
+        if show then
+            local char = plr.Character
             local hrp = char and char:FindFirstChild("HumanoidRootPart")
             local head = char and char:FindFirstChild("Head")
 
             if hrp and head then
-                local esp = CreateESPMarker(player)
+                local esp = makeesp(plr)
                 esp.Adornee = head
-                esp.Parent = Visuals.Gui
+                esp.Parent = visuals.gui
 
-                local diamond = esp:FindFirstChild("Diamond")
-                if diamond and Settings.ESPUseTeamColors then
-                    local playerTeam = player.Team
-                    if playerTeam == guardsTeam then
-                        diamond.BackgroundColor3 = Settings.ESPGuardsColor
-                    elseif playerTeam == inmatesTeam then
-                        diamond.BackgroundColor3 = Settings.ESPInmatesColor
-                    elseif playerTeam == criminalsTeam then
-                        diamond.BackgroundColor3 = Settings.ESPCriminalsColor
-                    else
-                        diamond.BackgroundColor3 = Settings.ESPColor
-                    end
+                local d = esp:FindFirstChild("Diamond")
+                if d and cfg.espuseteamcolors then
+                    local t = plr.Team
+                    if t == me.Team then d.BackgroundColor3 = cfg.espteam
+                    elseif t == guardsteam then d.BackgroundColor3 = cfg.espguards
+                    elseif t == inmatesteam then d.BackgroundColor3 = cfg.espinmates
+                    elseif t == crimsteam then d.BackgroundColor3 = cfg.espcriminals
+                    else d.BackgroundColor3 = cfg.espcolor end
                 end
 
-                if Settings.ESPShowDistance and myHRP then
-                    local distLabel = esp:FindFirstChild("DistanceLabel")
-                    if distLabel then
-                        distLabel.Text = math.floor((hrp.Position - myHRP.Position).Magnitude) .. "m"
-                        distLabel.Visible = true
+                if cfg.espshowdist and myhrp then
+                    local distlbl = esp:FindFirstChild("DistanceLabel")
+                    if distlbl then
+                        distlbl.Text = math.floor((hrp.Position - myhrp.Position).Magnitude) .. "m"
+                        distlbl.Visible = true
                     end
                 end
             end
         else
-            local esp = ESPCache[player]
-            if esp then esp.Parent = nil end
+            local e = espcache[plr]
+            if e then e.Parent = nil end
         end
     end
 end
 
-CreateVisuals()
+makevisuals()
 
-local PartMappings = {
+local partmap = {
     ["Torso"] = {"Torso", "UpperTorso", "LowerTorso"},
     ["LeftArm"] = {"Left Arm", "LeftUpperArm", "LeftLowerArm", "LeftHand"},
     ["RightArm"] = {"Right Arm", "RightUpperArm", "RightLowerArm", "RightHand"},
@@ -249,108 +255,122 @@ local PartMappings = {
     ["RightLeg"] = {"Right Leg", "RightUpperLeg", "RightLowerLeg", "RightFoot"}
 }
 
-local function GetBodyPart(character, partName)
-    if not character then return nil end
-    local directPart = character:FindFirstChild(partName)
-    if directPart then return directPart end
+local function getpart(char, name)
+    if not char then return nil end
 
-    local mappings = PartMappings[partName]
-    if mappings then
-        for _, name in ipairs(mappings) do
-            local part = character:FindFirstChild(name)
+    local p = char:FindFirstChild(name)
+    if p then return p end
+
+    local maps = partmap[name]
+    if maps then
+        for _, n in ipairs(maps) do
+            local part = char:FindFirstChild(n)
             if part then return part end
         end
     end
-    return character:FindFirstChild("HumanoidRootPart") or character:FindFirstChild("Head")
+
+    return char:FindFirstChild("HumanoidRootPart") or char:FindFirstChild("Head")
 end
 
-local function GetTargetPart(character)
-    if not character then return nil end
-    local partName
-    if Settings.RandomAimParts then
-        local partsList = Settings.AimPartsList
-        partName = (partsList and #partsList > 0) and partsList[math.random(1, #partsList)] or "Head"
+local function gettargetpart(char)
+    if not char then return nil end
+
+    local partname
+    if cfg.randomparts then
+        local list = cfg.partslist
+        partname = (list and #list > 0) and list[rng:NextInteger(1, #list)] or "Head"
     else
-        partName = Settings.AimPart
+        partname = cfg.aimpart
     end
-    return GetBodyPart(character, partName)
+
+    return getpart(char, partname)
 end
 
-local function IsPlayerDead(plr)
+local function isdead(plr)
     if not plr or not plr.Character then return true end
     local hum = plr.Character:FindFirstChildOfClass("Humanoid")
     return not hum or hum.Health <= 0
 end
 
-local function IsPlayerStationary(plr)
+local function isstanding(plr)
     if not plr or not plr.Character then return false end
     local hrp = plr.Character:FindFirstChild("HumanoidRootPart")
     if not hrp then return false end
-    local velocity = hrp.AssemblyLinearVelocity
-    return Vector2.new(velocity.X, velocity.Z).Magnitude <= Settings.StationaryThreshold
+    local vel = hrp.AssemblyLinearVelocity
+    return Vector2.new(vel.X, vel.Z).Magnitude <= cfg.stillthreshold
 end
 
-local function HasForceField(plr)
+local function hasff(plr)
     if not plr or not plr.Character then return false end
     return plr.Character:FindFirstChildOfClass("ForceField") ~= nil
 end
 
-local function IsWallBetween(startPos, endPos, targetCharacter)
-    local myChar = LocalPlayer.Character
-    if not myChar then return true end
+local function isinvehicle(plr)
+    if not plr or not plr.Character then return false end
+    local hum = plr.Character:FindFirstChildOfClass("Humanoid")
+    if not hum then return false end
+    local seat = hum.SeatPart
+    return seat ~= nil
+end
 
-    local filterList = {myChar}
-    if targetCharacter then table.insert(filterList, targetCharacter) end
-    WallCheckParams.FilterDescendantsInstances = filterList
+local function wallbetween(startpos, endpos, targetchar)
+    local mychar = me.Character
+    if not mychar then return true end
 
-    local direction = endPos - startPos
-    local distance = direction.Magnitude
-    local directionUnit = direction.Unit
+    local filter = {mychar}
+    if targetchar then table.insert(filter, targetchar) end
+    wallparams.FilterDescendantsInstances = filter
 
-    local currentStart = startPos
-    local remainingDistance = distance
+    local dir = endpos - startpos
+    local dist = dir.Magnitude
+    local unit = dir.Unit
+
+    local curstart = startpos
+    local remaining = dist
 
     for _ = 1, 10 do
-        local result = workspace:Raycast(currentStart, directionUnit * remainingDistance, WallCheckParams)
+        local result = workspace:Raycast(curstart, unit * remaining, wallparams)
         if not result then return false end
 
-        local hitPart = result.Instance
-        if hitPart.Transparency < 0.8 and hitPart.CanCollide then return true end
+        local hit = result.Instance
+        if hit.Transparency < 0.8 and hit.CanCollide then return true end
 
-        local hitDistance = (result.Position - currentStart).Magnitude
-        remainingDistance = remainingDistance - hitDistance - 0.01
-        if remainingDistance <= 0 then return false end
+        local hitdist = (result.Position - curstart).Magnitude
+        remaining = remaining - hitdist - 0.01
+        if remaining <= 0 then return false end
 
-        currentStart = result.Position + directionUnit * 0.01
+        curstart = result.Position + unit * 0.01
     end
+
     return false
 end
 
-local function IsValidTargetQuick(plr)
-    if not plr or plr == LocalPlayer or not plr.Character then return false end
-    if not GetTargetPart(plr.Character) then return false end
-    if Settings.DeathCheck and IsPlayerDead(plr) then return false end
-    if Settings.ForceFieldCheck and HasForceField(plr) then return false end
-    if Settings.TeamCheck and plr.Team == LocalPlayer.Team then return false end
+local function quickcheck(plr)
+    if not plr or plr == me or not plr.Character then return false end
+    if not gettargetpart(plr.Character) then return false end
+    if cfg.deathcheck and isdead(plr) then return false end
+    if cfg.ffcheck and hasff(plr) then return false end
+    if cfg.vehiclecheck and isinvehicle(plr) then return false end
+    if cfg.teamcheck and plr.Team == me.Team then return false end
 
-    if Settings.HostileCheck or Settings.TrespassingCheck then
-        local isTaser = CurrentGun and CurrentGun:GetAttribute("Projectile") == "Taser"
-        local bypassHostile = Settings.TaserBypassHostile and isTaser
-        local bypassTrespassing = Settings.TaserBypassTrespassing and isTaser
-        local targetChar = plr.Character
+    if cfg.hostilecheck or cfg.trespasscheck then
+        local istaser = currentgun and currentgun:GetAttribute("Projectile") == "Taser"
+        local bypasshostile = cfg.taserbypasshostile and istaser
+        local bypasstrespass = cfg.taserbypasstrespass and istaser
+        local tchar = plr.Character
 
-        if LocalPlayer.Team == guardsTeam and plr.Team == inmatesTeam then
-            local isHostile = targetChar:GetAttribute("Hostile")
-            local isTrespassing = targetChar:GetAttribute("Trespassing")
+        if me.Team == guardsteam and plr.Team == inmatesteam then
+            local hostile = tchar:GetAttribute("Hostile")
+            local trespass = tchar:GetAttribute("Trespassing")
 
-            if Settings.HostileCheck and Settings.TrespassingCheck then
-                if not bypassHostile and not bypassTrespassing then
-                    if not isHostile and not isTrespassing then return false end
+            if cfg.hostilecheck and cfg.trespasscheck then
+                if not bypasshostile and not bypasstrespass then
+                    if not hostile and not trespass then return false end
                 end
-            elseif Settings.HostileCheck and not bypassHostile then
-                if not isHostile then return false end
-            elseif Settings.TrespassingCheck and not bypassTrespassing then
-                if not isTrespassing then return false end
+            elseif cfg.hostilecheck and not bypasshostile then
+                if not hostile then return false end
+            elseif cfg.trespasscheck and not bypasstrespass then
+                if not trespass then return false end
             end
         end
     end
@@ -358,82 +378,102 @@ local function IsValidTargetQuick(plr)
     return true
 end
 
-local function IsValidTargetFull(plr)
-    if not IsValidTargetQuick(plr) then return false end
+local function fullcheck(plr)
+    if not quickcheck(plr) then return false end
 
-    if Settings.WallCheck then
-        local myChar = LocalPlayer.Character
-        local myHead = myChar and myChar:FindFirstChild("Head")
-        local targetPart = GetTargetPart(plr.Character)
-        if myHead and targetPart then
-            if IsWallBetween(myHead.Position, targetPart.Position, plr.Character) then
+    if cfg.wallcheck then
+        local mychar = me.Character
+        local myhead = mychar and mychar:FindFirstChild("Head")
+        local targetpart = gettargetpart(plr.Character)
+        if myhead and targetpart then
+            if wallbetween(myhead.Position, targetpart.Position, plr.Character) then
                 return false
             end
         end
     end
+
     return true
 end
 
-local function RollHitChance()
-    if Settings.HitChance >= 100 then return true end
-    if Settings.HitChance <= 0 then return false end
-    return math.random(1, 100) <= Settings.HitChance
+local function rollhit()
+    local now = os.clock()
+    if now - lastshottime > shotcooldown then
+        lastshottime = now
+        local c = cfg.hitchance
+        if c >= 100 then
+            lastshotresult = true
+        elseif c <= 0 then
+            lastshotresult = false
+        else
+            lastshotresult = rng:NextInteger(1, 100) <= c
+        end
+    end
+    return lastshotresult
 end
 
-local function GetMissPosition(targetPos)
-    local spreadRadius = Settings.MissSpread
-    local angle = math.random() * math.pi * 2
-    local dist = math.random() * spreadRadius
-    return targetPos + Vector3.new(math.cos(angle) * dist, (math.random() - 0.5) * spreadRadius, math.sin(angle) * dist)
+local function getmisspos(targetpos)
+    local spread = cfg.missspread
+    local angle = rng:NextNumber() * math.pi * 2
+    local d = rng:NextNumber() * spread
+    local yoff = (rng:NextNumber() - 0.5) * spread
+    return targetpos + Vector3.new(math.cos(angle) * d, yoff, math.sin(angle) * d)
 end
 
-local function GetClosestTarget(fov)
-    fov = fov or Settings.FOV
-    local camera = workspace.CurrentCamera
-    if not camera then return nil, nil end
+local function getclosest(fovrad)
+    fovrad = fovrad or cfg.fov
+    local cam = workspace.CurrentCamera
+    if not cam then return nil, nil end
 
-    local lastInputType = UserInputService:GetLastInputType()
-    local isLockedOrMobile = (lastInputType == Enum.UserInputType.Touch) or (UserInputService.MouseBehavior == Enum.MouseBehavior.LockCenter)
+    local lastinput = uis:GetLastInputType()
+    local locked = (lastinput == Enum.UserInputType.Touch) or (uis.MouseBehavior == Enum.MouseBehavior.LockCenter)
 
-    local aimPos
-    if isLockedOrMobile then
-        local viewportSize = camera.ViewportSize
-        aimPos = Vector2.new(viewportSize.X / 2, viewportSize.Y / 2)
+    local aimpos
+    if locked then
+        local vs = cam.ViewportSize
+        aimpos = Vector2.new(vs.X / 2, vs.Y / 2)
     else
-        aimPos = UserInputService:GetMouseLocation()
+        aimpos = uis:GetMouseLocation()
     end
 
     local candidates = {}
 
-    for _, plr in ipairs(Players:GetPlayers()) do
-        if IsValidTargetQuick(plr) then
-            local targetPart = GetTargetPart(plr.Character)
-            if targetPart then
-                local screenPos, onScreen = camera:WorldToViewportPoint(targetPart.Position)
-                if onScreen and screenPos.Z > 0 then
-                    local dist = (Vector2.new(screenPos.X, screenPos.Y) - aimPos).Magnitude
-                    if dist < fov then
-                        table.insert(candidates, {player = plr, distance = dist, part = targetPart})
+    for _, plr in ipairs(plrs:GetPlayers()) do
+        if quickcheck(plr) then
+            local part = gettargetpart(plr.Character)
+            if part then
+                local sp, onscreen = cam:WorldToViewportPoint(part.Position)
+                if onscreen and sp.Z > 0 then
+                    local d = (Vector2.new(sp.X, sp.Y) - aimpos).Magnitude
+                    if d < fovrad then
+                        table.insert(candidates, {plr = plr, dist = d, part = part})
                     end
                 end
             end
         end
     end
 
-    table.sort(candidates, function(a, b) return a.distance < b.distance end)
+    if cfg.prioritizeclosest then
+        table.sort(candidates, function(a, b) return a.dist < b.dist end)
+    else
+        for i = #candidates, 2, -1 do
+            local j = rng:NextInteger(1, i)
+            candidates[i], candidates[j] = candidates[j], candidates[i]
+        end
+    end
 
-    for _, candidate in ipairs(candidates) do
-        if IsValidTargetFull(candidate.player) then
-            return candidate.player, candidate.part.Position
+    for _, c in ipairs(candidates) do
+        if fullcheck(c.plr) then
+            return c.plr, c.part.Position
         end
     end
 
     return nil, nil
 end
 
-local function GetEquippedGun()
-    local char = LocalPlayer.Character
+local function getgun()
+    local char = me.Character
     if not char then return nil end
+
     for _, tool in ipairs(char:GetChildren()) do
         if tool:IsA("Tool") and tool:GetAttribute("ToolType") == "Gun" then
             return tool
@@ -442,103 +482,97 @@ local function GetEquippedGun()
     return nil
 end
 
-RunService.Heartbeat:Connect(function()
-    CurrentGun = GetEquippedGun()
+rs.Heartbeat:Connect(function()
+    currentgun = getgun()
 end)
 
-RunService.PreRender:Connect(function()
-    local aimPos = UserInputService:GetMouseLocation()
-    local camera = workspace.CurrentCamera
+rs.PreRender:Connect(function()
+    local aimpos = uis:GetMouseLocation()
+    local cam = workspace.CurrentCamera
 
-    if camera then
-        local lastInputType = UserInputService:GetLastInputType()
-        local isLockedOrMobile = (lastInputType == Enum.UserInputType.Touch) or (UserInputService.MouseBehavior == Enum.MouseBehavior.LockCenter)
-
-        if isLockedOrMobile then
-            local viewportSize = camera.ViewportSize
-            aimPos = Vector2.new(viewportSize.X / 2, viewportSize.Y / 2)
+    if cam then
+        local lastinput = uis:GetLastInputType()
+        local locked = (lastinput == Enum.UserInputType.Touch) or (uis.MouseBehavior == Enum.MouseBehavior.LockCenter)
+        if locked then
+            local vs = cam.ViewportSize
+            aimpos = Vector2.new(vs.X / 2, vs.Y / 2)
         end
     end
 
-    fov_circle.Position = aimPos
-    fov_circle.Radius = Settings.FOV
-    fov_circle.Visible = Settings.ShowFOV and Settings.Enabled
+    fovcircle.Position = aimpos
+    fovcircle.Radius = cfg.fov
+    fovcircle.Visible = cfg.showfov and cfg.enabled
 
-    if Settings.ShowTargetLine and Settings.Enabled then
-        local target, targetPos = GetClosestTarget()
-        if target and targetPos and camera then
-            local screenPos, onScreen = camera:WorldToViewportPoint(targetPos)
-            if onScreen then
-                target_line.From = aimPos
-                target_line.To = Vector2.new(screenPos.X, screenPos.Y)
-                target_line.Visible = true
+    if cfg.showtargetline and cfg.enabled then
+        local target, tpos = getclosest()
+        if target and tpos and cam then
+            local sp, onscreen = cam:WorldToViewportPoint(tpos)
+            if onscreen then
+                targetline.From = aimpos
+                targetline.To = Vector2.new(sp.X, sp.Y)
+                targetline.Visible = true
             else
-                target_line.Visible = false
+                targetline.Visible = false
             end
         else
-            target_line.Visible = false
+            targetline.Visible = false
         end
     else
-        target_line.Visible = false
+        targetline.Visible = false
     end
 
-    UpdateESP()
+    updateesp()
 end)
 
-UserInputService.InputBegan:Connect(function(input, gpe)
+uis.InputBegan:Connect(function(input, gpe)
     if gpe then return end
 end)
 
-Players.PlayerRemoving:Connect(RemoveESPMarker)
+plrs.PlayerRemoving:Connect(removeesp)
 
-LPH_NO_UPVALUES = function(func)
-    return function(...)
-        return func(...)
-    end
+local function noupvals(fn)
+    return function(...) return fn(...) end
 end
 
-local castRay = filtergc("function", {Name = "castRay"}, true)
-local old_castRay
-old_castRay = hookfunction(castRay, LPH_NO_UPVALUES(function(...)
-    if not Settings.Enabled then
-        return old_castRay(...)
-    end
+local castrayf = filtergc("function", {Name = "castRay"}, true)
+local origcastray
+origcastray = hookfunction(castrayf, noupvals(function(startPos, targetPos, ...)
+    if not cfg.enabled then return origcastray(startPos, targetPos, ...) end
 
-    local closest_player, closest_position = GetClosestTarget(Settings.FOV)
+    local closest, cpos = getclosest(cfg.fov)
 
-    if closest_player and closest_player.Character then
-        local isTaser = CurrentGun and CurrentGun:GetAttribute("Projectile") == "Taser"
-        local shouldHit = false
+    if closest and closest.Character then
+        local istaser = currentgun and currentgun:GetAttribute("Projectile") == "Taser"
+        local isshotgun = currentgun and currentgun:GetAttribute("IsShotgun")
+        local shouldhit = false
 
-        if Settings.TaserAlwaysHit and isTaser then
-            shouldHit = true
-        elseif Settings.IfPlayerIsStill and IsPlayerStationary(closest_player) then
-            shouldHit = true
-        elseif RollHitChance() then
-            shouldHit = true
+        if cfg.taseralwayshit and istaser then
+            shouldhit = true
+        elseif cfg.ifplayerstill and isstanding(closest) then
+            shouldhit = true
+        else
+            shouldhit = rollhit()
         end
 
-        if shouldHit then
-            local targetPart = GetTargetPart(closest_player.Character)
-            if targetPart then
-                return targetPart, closest_position
+        if shouldhit then
+            local tpart = gettargetpart(closest.Character)
+            if tpart then
+                if isshotgun and cfg.shotgunnaturalspread then
+                    return origcastray(startPos, tpart.Position, ...)
+                end
+                return tpart, cpos
             end
-        elseif Settings.MissSpread > 0 then
-            local targetPart = GetTargetPart(closest_player.Character)
-            if targetPart then
-                local missPos = GetMissPosition(targetPart.Position)
-                return nil, missPos
+        else
+            if cfg.missspread > 0 then
+                local tpart = gettargetpart(closest.Character)
+                if tpart then
+                    local misspos = getmisspos(tpart.Position)
+                    return nil, misspos
+                end
             end
+            return origcastray(startPos, targetPos, ...)
         end
     end
 
-    return old_castRay(...)
+    return origcastray(startPos, targetPos, ...)
 end))
-
-pcall(function()
-    StarterGui:SetCore("SendNotification", {
-        Title = "Silent Aim + ESP",
-        Text = "Successfully loaded!",
-        Duration = 5,
-    })
-end)

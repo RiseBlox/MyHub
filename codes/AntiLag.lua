@@ -1,7 +1,3 @@
-if not game:IsLoaded() then
-    game.Loaded:Wait()
-end
-
 local Players = game:GetService("Players")
 local Lighting = game:GetService("Lighting")
 local Workspace = game:GetService("Workspace")
@@ -119,4 +115,3 @@ Lighting.ChildAdded:Connect(function(obj)
         safeDestroy(obj)
     end
 end)
-game.StarterGui:SetCore("SendNotification", {Text="Successfully loaded!", Title="Anti Lag"})

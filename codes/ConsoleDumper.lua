@@ -17,4 +17,3 @@ for _, logEntry in ipairs(logHistory) do
 end
 
 writefile(identifyexecutor() .. ".txt", allMessages)
-game.StarterGui:SetCore("SendNotification", {Text="Console saved to file!", Title="Console Dumper"})

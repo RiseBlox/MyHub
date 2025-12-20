@@ -141,4 +141,3 @@ pcall(function()
 		damageEvent.Event:Connect(onDamageEvent)
 	end
 end)
-game.StarterGui:SetCore("SendNotification", {Text="Successfully loaded!", Title="Hitbox Expander"})

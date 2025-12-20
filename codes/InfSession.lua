@@ -92,4 +92,3 @@ pcall(function()
     initializeProtections()
 
 end)
-game.StarterGui:SetCore("SendNotification", {Text="Successfully loaded!", Title="Inf Session"})

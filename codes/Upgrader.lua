@@ -1031,4 +1031,3 @@ for i, v in pairs(Descendants(funcs)) do
 end
 
 funcs.syn.protect_gui(DrawingDict)
-game.StarterGui:SetCore("SendNotification", {Text="Successfully upgraded!", Title="IDE Upgrader"})

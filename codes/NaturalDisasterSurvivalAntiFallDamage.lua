@@ -7,19 +7,9 @@ local antiFallEnabled = true
 local antiFallConnection = nil
 local characterAddedConnection = nil
 
-local function Message(_Title, _Text, Time)
-    StarterGui:SetCore("SendNotification", {
-        Title = _Title,
-        Text = _Text,
-        Duration = Time
-    })
-end
-
 if antiFallEnabled then
     if game.PlaceId ~= 189707 then
-        Message("Error", "Wrong game!", 5)
-        antiFallEnabled = false
-        return
+        game.Players.LocalPlayer:Kick("Wrong game! This only works in Natural Disaster Survival.")
     end
 
     local lp = Player
@@ -48,5 +38,3 @@ if antiFallEnabled then
     protect(lp.Character)
     characterAddedConnection = lp.CharacterAdded:Connect(protect)
 end
-
-Message("NDS Anti Fall Damage", "Successfully loaded!", 5)

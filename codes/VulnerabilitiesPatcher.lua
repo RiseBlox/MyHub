@@ -39,5 +39,3 @@ end
 if xx.Warn then
     warn = antiPrint
 end
-
-game.StarterGui:SetCore("SendNotification", {Text="Successfully patched!", Title="IDE Vulnerabilities Patcher"})

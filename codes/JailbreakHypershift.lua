@@ -19,4 +19,3 @@ spawn(function()
         wait(1)
     end
 end)
-game.StarterGui:SetCore("SendNotification", {Text="Successfully enabled!", Title="Client-sided Hypershift"})

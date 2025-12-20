@@ -7,8 +7,6 @@ _G.WRDESPNames = false --Display the names of the other players.
 
 game.StarterGui:SetCore("SendNotification", {Text="Successfully loaded!", Title="WRD ESP"})
 
--- WARNING: Edit anything below this point may break the script!
-
 if not _G.WRDESPLoaded then    
     ----[[ First- Load Kiriot ESP Library ]]----
 

@@ -5,9 +5,9 @@ local utility = require(replicatedStorage.Modules.Utility)
 local replicatedStorage = game:GetService("ReplicatedStorage")
 
 local silentAimEnabled = true
-local FOV = 50
+local FOV = 25
 local showFOV = true
-local headshotChance = 50 -- in percent
+local headshotChance = 25
 local predictionAmount = 0 -- how far ahead to predict movement (in seconds)
 
 local fovCircle
@@ -27,11 +27,6 @@ end
 local function rollHeadshotChance()
 	return rng:NextNumber(0, 100) <= headshotChance
 end
-
-game.StarterGui:SetCore("SendNotification", {
-	Text = "Successfully loaded!",
-	Title = "Silent Aim"
-})
 
 local function getPlayers()
 	local entities = {}

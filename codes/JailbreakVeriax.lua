@@ -309,7 +309,6 @@ game:GetService("RunService").RenderStepped:Connect(function()
         engine.GetVehiclePacket().TirePopDuration = 0
     end
 end)
-game.StarterGui:SetCore("SendNotification", {Text="Successfully loaded!", Title="Veriax"})
 while wait(3) do
     if OpenDoors == true then
         for i,v in next, engine.Doors do 

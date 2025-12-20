@@ -270,5 +270,3 @@ minimize.MouseButton1Click:Connect(function()
 		frame.Position = UDim2.new(0.5, -150, 0.5, -75)
 	end
 end)
-
-game.StarterGui:SetCore("SendNotification", {Text="Successfully loaded!", Title="Map Loader"})
