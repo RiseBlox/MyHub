@@ -12,7 +12,7 @@ local teams = game:GetService("Teams")
 local cfg = {
     enabled = true,
     teamcheck = true,
-    wallcheck = false,
+    wallcheck = true,
     deathcheck = true,
     ffcheck = true,
     hostilecheck = true,
@@ -27,7 +27,12 @@ local cfg = {
     missspread = 0,
     shotgunnaturalspread = false,
     prioritizeclosest = true,
-    fov = 150,
+    targetstickiness = false,
+    targetstickinessduration = 0,
+    targetstickinessrandom = false,
+    targetstickinessmin = 0,
+    targetstickinessmax = 0,
+    fov = 100,
     showfov = true,
     showtargetline = false,
     aimpart = "Head",
@@ -37,7 +42,7 @@ local cfg = {
     espteamcheck = true,
     espshowteam = false,
     esptargets = {guards = true, inmates = true, criminals = true},
-    espmaxdist = 500,
+    espmaxdist = 9999,
     espshowdist = true,
     espcolor = Color3.fromRGB(0, 170, 255),
     espguards = Color3.fromRGB(0, 170, 255),
@@ -62,6 +67,9 @@ local rng = Random.new()
 local lastshottime = 0
 local lastshotresult = false
 local shotcooldown = 0.15
+local currenttarget = nil
+local targetswitchtime = 0
+local currentstickiness = 0
 
 local fovcircle = Drawing.new("Circle")
 fovcircle.Color = Color3.fromRGB(255, 0, 0)
@@ -78,26 +86,24 @@ targetline.Thickness = 1
 targetline.Transparency = 0.5
 targetline.Visible = false
 
-local visuals = {gui = nil}
+local visuals = {container = nil}
 local espcache = {}
 
 local function makevisuals()
-    local sg = Instance.new("ScreenGui")
-    sg.Name = "SilentAimESP"
-    sg.ResetOnSpawn = false
-    sg.IgnoreGuiInset = true
-
-    if syn and syn.protect_gui then
-        syn.protect_gui(sg)
-        sg.Parent = coregui
-    elseif gethui then
-        sg.Parent = gethui()
+    local container
+    if gethui then
+        container = gethui()
+    elseif syn and syn.protect_gui then
+        local folder = Instance.new("Folder")
+        folder.Name = "SilentAimESP"
+        syn.protect_gui(folder)
+        folder.Parent = coregui
+        container = folder
     else
-        sg.Parent = coregui
+        container = coregui
     end
 
-    if not sg.Parent then sg.Parent = me:WaitForChild("PlayerGui") end
-    visuals.gui = sg
+    visuals.container = container
 end
 
 local function makeesp(plr)
@@ -114,15 +120,15 @@ local function makeesp(plr)
     diamond.Name = "Diamond"
     diamond.BackgroundColor3 = cfg.espcolor
     diamond.BorderSizePixel = 0
-    diamond.Size = UDim2.new(0, 10, 0, 10)
+    diamond.Size = UDim2.new(0, 5, 0, 5)
     diamond.Position = UDim2.new(0.5, -5, 0.5, -5)
     diamond.Rotation = 45
     diamond.Parent = esp
 
     local stroke = Instance.new("UIStroke")
     stroke.Color = Color3.new(0, 0, 0)
-    stroke.Thickness = 1.5
-    stroke.Transparency = 0.3
+    stroke.Thickness = 1
+    stroke.Transparency = 0
     stroke.Parent = diamond
 
     local dist = Instance.new("TextLabel")
@@ -199,7 +205,7 @@ local function shouldshowesp(plr)
 end
 
 local function updateesp()
-    if not cfg.esp or not visuals.gui then
+    if not cfg.esp or not visuals.container then
         for _, e in pairs(espcache) do e.Parent = nil end
         return
     end
@@ -218,7 +224,7 @@ local function updateesp()
             if hrp and head then
                 local esp = makeesp(plr)
                 esp.Adornee = head
-                esp.Parent = visuals.gui
+                esp.Parent = visuals.container
 
                 local d = esp:FindFirstChild("Diamond")
                 if d and cfg.espuseteamcolors then
@@ -435,6 +441,23 @@ local function getclosest(fovrad)
         aimpos = uis:GetMouseLocation()
     end
 
+    local now = os.clock()
+
+    if cfg.targetstickiness and currenttarget and (now - targetswitchtime) < currentstickiness then
+        if fullcheck(currenttarget) then
+            local part = gettargetpart(currenttarget.Character)
+            if part then
+                local sp, onscreen = cam:WorldToViewportPoint(part.Position)
+                if onscreen and sp.Z > 0 then
+                    local d = (Vector2.new(sp.X, sp.Y) - aimpos).Magnitude
+                    if d < fovrad then
+                        return currenttarget, part.Position
+                    end
+                end
+            end
+        end
+    end
+
     local candidates = {}
 
     for _, plr in ipairs(plrs:GetPlayers()) do
@@ -463,10 +486,20 @@ local function getclosest(fovrad)
 
     for _, c in ipairs(candidates) do
         if fullcheck(c.plr) then
+            if c.plr ~= currenttarget then
+                currenttarget = c.plr
+                targetswitchtime = now
+                if cfg.targetstickinessrandom then
+                    currentstickiness = rng:NextNumber(cfg.targetstickinessmin, cfg.targetstickinessmax)
+                else
+                    currentstickiness = cfg.targetstickinessduration
+                end
+            end
             return c.plr, c.part.Position
         end
     end
 
+    currenttarget = nil
     return nil, nil
 end
 
@@ -530,13 +563,29 @@ end)
 
 plrs.PlayerRemoving:Connect(removeesp)
 
+local function clearesp()
+    for plr, e in pairs(espcache) do
+        if e then e:Destroy() end
+        espcache[plr] = nil
+    end
+end
+
+me:GetPropertyChangedSignal("Team"):Connect(function()
+    clearesp()
+end)
+
 local function noupvals(fn)
     return function(...) return fn(...) end
 end
 
-local castrayf = filtergc("function", {Name = "castRay"}, true)
 local origcastray
-origcastray = hookfunction(castrayf, noupvals(function(startPos, targetPos, ...)
+local hooked = false
+
+local function setuphook()
+    local castrayf = filtergc("function", {Name = "castRay"}, true)
+    if not castrayf then return false end
+
+    origcastray = hookfunction(castrayf, noupvals(function(startPos, targetPos, ...)
     if not cfg.enabled then return origcastray(startPos, targetPos, ...) end
 
     local closest, cpos = getclosest(cfg.fov)
@@ -558,9 +607,15 @@ origcastray = hookfunction(castrayf, noupvals(function(startPos, targetPos, ...)
             local tpart = gettargetpart(closest.Character)
             if tpart then
                 if isshotgun and cfg.shotgunnaturalspread then
-                    return origcastray(startPos, tpart.Position, ...)
+                    local spreadamt = 2
+                    local offset = Vector3.new(
+                        (rng:NextNumber() - 0.5) * spreadamt,
+                        (rng:NextNumber() - 0.5) * spreadamt,
+                        (rng:NextNumber() - 0.5) * spreadamt
+                    )
+                    return tpart, tpart.Position + offset
                 end
-                return tpart, cpos
+                return tpart, tpart.Position
             end
         else
             if cfg.missspread > 0 then
@@ -576,3 +631,18 @@ origcastray = hookfunction(castrayf, noupvals(function(startPos, targetPos, ...)
 
     return origcastray(startPos, targetPos, ...)
 end))
+    return true
+end
+
+if not setuphook() then
+    task.spawn(function()
+        while not hooked do
+            task.wait(0.5)
+            if setuphook() then
+                hooked = true
+            end
+        end
+    end)
+else
+    hooked = true
+end
