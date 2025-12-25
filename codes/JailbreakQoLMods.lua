@@ -58,3 +58,5 @@ task.spawn(function()
         task.wait(2)
     end
 end)
+
+require(game:GetService("ReplicatedStorage").Game.Paraglide).IsFlying = false
