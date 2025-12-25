@@ -31,6 +31,6 @@ task.spawn(function()
                 v.TirePopDuration = 0
             end
         end
-        task.wait(2)
+        task.wait(0)
     end
 end)

@@ -1,3 +1,25 @@
+local SPEED = 100
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+
+local player = Players.LocalPlayer
+local humanoid
+
+local function bind(char)
+    humanoid = char:WaitForChild("Humanoid", 5)
+end
+
+if player.Character then
+    bind(player.Character)
+end
+player.CharacterAdded:Connect(bind)
+
+RunService.RenderStepped:Connect(function()
+    if humanoid then
+        humanoid.WalkSpeed = SPEED
+    end
+end)
+
 local Doors = {}
 local OpenDoorFunc
 local TimeTable

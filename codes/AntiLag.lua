@@ -1,117 +1,103 @@
 local Players = game:GetService("Players")
 local Lighting = game:GetService("Lighting")
 local Workspace = game:GetService("Workspace")
-local RunService = game:GetService("RunService")
 
-local function safeDestroy(obj)
-    if obj and obj.Destroy then
-        pcall(function() obj:Destroy() end)
-    end
+pcall(function()
+	settings().Rendering.QualityLevel = 3
+end)
+
+local function applyLighting()
+	Lighting.LightingStyle = Enum.LightingStyle.Soft
+	Lighting.Technology = Enum.Technology.Voxel
+	Lighting.GlobalShadows = false
+	Lighting.FogEnd = 9e9
+	Lighting.FogStart = 9e9
 end
 
-local function hardLighting()
-    Lighting.Brightness = 2
-    Lighting.ClockTime = 14
-    Lighting.FogEnd = 1e9
-    Lighting.FogStart = 1e9
-    Lighting.GlobalShadows = false
-    Lighting.OutdoorAmbient = Color3.fromRGB(128, 128, 128)
-end
+applyLighting()
 
 Lighting.Changed:Connect(function()
-    task.defer(hardLighting)
+	task.defer(applyLighting)
 end)
 
-hardLighting()
-
-local EFFECT_CLASSES = {
-    ParticleEmitter = true,
-    Trail = true,
-    Fire = true,
-    Smoke = true,
-    Sparkles = true,
-    Beam = true,
-    Highlight = true
-}
-
-local function cleanCharacter(char)
-    for _, obj in ipairs(char:GetDescendants()) do
-        if EFFECT_CLASSES[obj.ClassName] then
-            safeDestroy(obj)
-        end
-    end
-
-    char.DescendantAdded:Connect(function(obj)
-        if EFFECT_CLASSES[obj.ClassName] then
-            task.defer(function()
-                safeDestroy(obj)
-            end)
-        end
-    end)
-end
-
-for _, plr in ipairs(Players:GetPlayers()) do
-    if plr.Character then cleanCharacter(plr.Character) end
-    plr.CharacterAdded:Connect(cleanCharacter)
-end
-
-Players.PlayerAdded:Connect(function(plr)
-    plr.CharacterAdded:Connect(cleanCharacter)
-end)
-
-local function batchOptimize()
-    local targetClasses = {
-        ["Explosion"] = true,
-        ["Atmosphere"] = true,
-        ["Clouds"] = true,
-        ["Sky"] = true,
-        ["BloomEffect"] = true,
-        ["BlurEffect"] = true,
-        ["ColorCorrectionEffect"] = true,
-        ["DepthOfFieldEffect"] = true,
-        ["SunRaysEffect"] = true,
-        ["Smoke"] = true,
-        ["Fire"] = true,
-        ["Sparkles"] = true,
-        ["Beam"] = true
-    }
-
-    local objects = Workspace:GetDescendants()
-    local n = #objects
-
-    for i = 1, n do
-        local obj = objects[i]
-        local class = obj.ClassName
-
-        if targetClasses[class] then
-            safeDestroy(obj)
-
-        elseif obj:IsA("BasePart") then
-            obj.CastShadow = false
-            obj.Reflectance = 0
-            obj.Material = Enum.Material.Plastic
-        end
-
-        if i % 300 == 0 then
-            RunService.Heartbeat:Wait()
-        end
-    end
-end
-
-task.spawn(batchOptimize)
-
-local Terrain = Workspace:FindFirstChildWhichIsA("Terrain")
-if Terrain then
-    Terrain.WaterWaveSize = 0
-    Terrain.WaterWaveSpeed = 0
-    Terrain.WaterReflectance = 0
-    Terrain.WaterTransparency = 1
+for _, v in ipairs(Lighting:GetDescendants()) do
+	if v:IsA("PostEffect") then
+		v.Enabled = false
+	end
 end
 
 Lighting.ChildAdded:Connect(function(obj)
-    if obj:IsA("Sky") or obj:IsA("Atmosphere") or obj:IsA("Clouds") then
-        safeDestroy(obj)
-    elseif obj:IsA("PostEffect") then
-        safeDestroy(obj)
-    end
+	if obj:IsA("PostEffect") then
+		obj.Enabled = false
+	elseif obj:IsA("Sky") or obj:IsA("Atmosphere") or obj:IsA("Clouds") then
+		obj.Enabled = false
+	end
+end)
+
+local Terrain = Workspace:FindFirstChildWhichIsA("Terrain")
+if Terrain then
+	Terrain.WaterWaveSize = 0
+	Terrain.WaterWaveSpeed = 0
+	Terrain.WaterReflectance = 0
+	Terrain.WaterTransparency = 1
+end
+
+for _, v in ipairs(Workspace:GetDescendants()) do
+	if v:IsA("BasePart") then
+		v.CastShadow = false
+		v.Material = Enum.Material.Plastic
+		v.Reflectance = 0
+	end
+end
+
+local function throttleEffect(obj)
+	if obj:IsA("ParticleEmitter") or obj:IsA("Trail") then
+		obj.Lifetime = NumberRange.new(0)
+	elseif obj:IsA("Beam") then
+		obj.Enabled = false
+	elseif obj:IsA("Fire") or obj:IsA("Smoke") or obj:IsA("Sparkles") then
+		obj.Enabled = false
+	end
+end
+
+for _, v in ipairs(Workspace:GetDescendants()) do
+	throttleEffect(v)
+end
+
+local function hookCharacter(char)
+	for _, v in ipairs(char:GetDescendants()) do
+		throttleEffect(v)
+	end
+
+	char.DescendantAdded:Connect(function(obj)
+		throttleEffect(obj)
+	end)
+end
+
+for _, plr in ipairs(Players:GetPlayers()) do
+	if plr.Character then
+		hookCharacter(plr.Character)
+	end
+	plr.CharacterAdded:Connect(hookCharacter)
+end
+
+Players.PlayerAdded:Connect(function(plr)
+	plr.CharacterAdded:Connect(hookCharacter)
+end)
+
+Workspace.DescendantAdded:Connect(function(obj)
+	task.defer(function()
+		if obj:IsA("BasePart") then
+			obj.CastShadow = false
+		elseif
+			obj:IsA("ParticleEmitter")
+			or obj:IsA("Trail")
+			or obj:IsA("Fire")
+			or obj:IsA("Smoke")
+			or obj:IsA("Sparkles")
+			or obj:IsA("Beam")
+		then
+			throttleEffect(obj)
+		end
+	end)
 end)
