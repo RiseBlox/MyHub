@@ -11,5 +11,5 @@
 </h6>
 
 ```lua
-loadstring(game:HttpGet("https://raw.githubusercontent.com/RiseBlox/MyHub/refs/heads/main/MyHub.lua", true))()
+loadstring(game:HttpGet("https://raw.githubusercontent.com/RiseBlox/MyHub/main/MyLoader.lua", true))()
 ```
