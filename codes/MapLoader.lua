@@ -9,9 +9,9 @@ local camera = Workspace.CurrentCamera
 local HEIGHT_OFFSET = 220
 local CHUNK_SIZE = 700
 
-local FAST_WAIT = 0.015
-local SWEEP_TWEEN = 0.16
-local SWEEP_WAIT = 0.025
+local FAST_WAIT = 0.06
+local SWEEP_TWEEN = 0.64
+local SWEEP_WAIT = 0.1
 
 local running = false
 local stopRequested = false
