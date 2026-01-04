@@ -1,36 +1,48 @@
+local Players = game:GetService("Players")
+local player = Players.LocalPlayer
+
+local NITRO_VALUE = 250
+local REFILL_THRESHOLD = 1
+local CHECK_INTERVAL = 0.5
+
 local NitroTables = {}
 local TireTables = {}
 
 for _, v in pairs(getgc(true)) do
     if typeof(v) == "table" then
-        if rawget(v, "Nitro") then
+        if rawget(v, "Nitro") ~= nil then
             table.insert(NitroTables, v)
         end
-        if rawget(v, "TirePopDuration") then
+        if rawget(v, "TirePopDuration") ~= nil then
             table.insert(TireTables, v)
         end
     end
 end
 
-for _, v in ipairs(NitroTables) do
-    v.Nitro = math.huge
+local function applyVehicleMods()
+    for _, v in ipairs(NitroTables) do
+        if type(v.Nitro) == "number" and v.Nitro <= REFILL_THRESHOLD then
+            v.Nitro = NITRO_VALUE
+        end
+    end
+
+    for _, v in ipairs(TireTables) do
+        if v.TirePopDuration ~= 0 then
+            v.TirePopDuration = 0
+        end
+    end
 end
-for _, v in ipairs(TireTables) do
-    v.TirePopDuration = 0
-end
+
+applyVehicleMods()
 
 task.spawn(function()
     while true do
-        for _, v in ipairs(NitroTables) do
-            if v.Nitro ~= math.huge then
-                v.Nitro = math.huge
-            end
-        end
-        for _, v in ipairs(TireTables) do
-            if v.TirePopDuration ~= 0 then
-                v.TirePopDuration = 0
-            end
-        end
-        task.wait(0)
+        applyVehicleMods()
+        task.wait(CHECK_INTERVAL)
     end
+end)
+
+player.CharacterAdded:Connect(function()
+    task.wait(1)
+    applyVehicleMods()
 end)
