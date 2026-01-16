@@ -1,5 +1,3 @@
---A really ugly ui library I made in 1 hour
-
 local UiLib = Instance.new("ScreenGui")
 local Docker = Instance.new("Frame")
 
@@ -326,4 +324,5 @@ function Library:createTab(Name)
 	end
 	return objs;
 end
+
 return Library;

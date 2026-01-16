@@ -1,10 +1,6 @@
 local Players = game:GetService("Players")
 local player = Players.LocalPlayer
 
-local NITRO_VALUE = 250
-local REFILL_THRESHOLD = 1
-local CHECK_INTERVAL = 0.5
-
 local NitroTables = {}
 local TireTables = {}
 
@@ -21,8 +17,8 @@ end
 
 local function applyVehicleMods()
     for _, v in ipairs(NitroTables) do
-        if type(v.Nitro) == "number" and v.Nitro <= REFILL_THRESHOLD then
-            v.Nitro = NITRO_VALUE
+        if type(v.Nitro) == "number" and v.Nitro <= 1 then
+            v.Nitro = 250
         end
     end
 
@@ -38,7 +34,7 @@ applyVehicleMods()
 task.spawn(function()
     while true do
         applyVehicleMods()
-        task.wait(CHECK_INTERVAL)
+        task.wait(0)
     end
 end)
 
