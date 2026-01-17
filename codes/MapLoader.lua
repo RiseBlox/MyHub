@@ -9,9 +9,9 @@ local camera = Workspace.CurrentCamera
 local CHUNK_SIZE   = 700
 local HEIGHT_PAD   = 120
 
-local FAST_WAIT   = 0.01
-local SWEEP_TWEEN = 0.01
-local SWEEP_WAIT  = 0.01
+local FAST_WAIT   = 0.05
+local SWEEP_TWEEN = 0.5
+local SWEEP_WAIT  = 0.05
 
 local running = false
 local stopRequested = false
@@ -58,7 +58,7 @@ local function setProgress(alpha, text, active)
 	progressFill.Size = UDim2.new(math.clamp(alpha,0,1),0,1,0)
 	progressText.Text = text
 	barBg.BackgroundColor3 = active
-		and Color3.fromRGB(45,45,45)
+		and Color3.fromHex("#20304c")
 		or Color3.fromRGB(60,60,60)
 end
 
@@ -131,7 +131,7 @@ local function runLoader()
 	camera.CameraType = Enum.CameraType.Scriptable
 
 	startBtn.Text = "Stop"
-	startBtn.BackgroundColor3 = Color3.fromRGB(170,0,0)
+	startBtn.BackgroundColor3 = Color3.fromHex("#264878")
 
 	local parts = collectParts()
 	if #parts == 0 then
@@ -214,13 +214,14 @@ gui.ResetOnSpawn = false
 frame = Instance.new("Frame", gui)
 frame.Size = UDim2.new(0, 320, 0, 160)
 frame.Position = UDim2.new(0.5,-160,0.5,-80)
-frame.BackgroundColor3 = Color3.fromRGB(25,25,25)
+frame.BackgroundColor3 = Color3.fromHex("#151618")
 frame.Active = true
 frame.Draggable = true
 
 local title = Instance.new("TextLabel", frame)
 title.Size = UDim2.new(1,0,0,32)
-title.BackgroundTransparency = 1
+title.BackgroundColor3 = Color3.fromHex("#2a4a79")
+title.BackgroundTransparency = 0
 title.Text = "MapLoader"
 title.Font = Enum.Font.SourceSansBold
 title.TextSize = 16
@@ -229,18 +230,20 @@ title.TextXAlignment = Enum.TextXAlignment.Center
 
 local closeBtn = Instance.new("TextButton", frame)
 closeBtn.Size = UDim2.new(0,32,0,32)
-closeBtn.Position = UDim2.new(1,-32,0,0)
+closeBtn.TextSize = 18
+closeBtn.Position = UDim2.new(1.02,-40,0,-1)
 closeBtn.Text = "X"
 closeBtn.BackgroundTransparency = 1
-closeBtn.TextColor3 = Color3.new(1,0.3,0.3)
+closeBtn.TextColor3 = Color3.fromHex("#ffffff")
 closeBtn.Font = Enum.Font.SourceSansBold
 
 local minimize = Instance.new("TextButton", frame)
 minimize.Size = UDim2.new(0,32,0,32)
-minimize.Position = UDim2.new(1,-64,0,0)
+minimize.TextSize = 22
+minimize.Position = UDim2.new(1,-50,0,-2)
 minimize.Text = "-"
 minimize.BackgroundTransparency = 1
-minimize.TextColor3 = Color3.new(1,1,1)
+minimize.TextColor3 = Color3.fromHex("#ffffff")
 minimize.Font = Enum.Font.SourceSansBold
 
 content = Instance.new("Frame", frame)
@@ -251,11 +254,11 @@ content.BackgroundTransparency = 1
 barBg = Instance.new("Frame", content)
 barBg.Size = UDim2.new(0.9,0,0,18)
 barBg.Position = UDim2.new(0.05,0,0,20)
-barBg.BackgroundColor3 = Color3.fromRGB(60,60,60)
+barBg.BackgroundColor3 = Color3.fromHex("#1e324d")
 
 progressFill = Instance.new("Frame", barBg)
 progressFill.Size = UDim2.new(0,0,1,0)
-progressFill.BackgroundColor3 = Color3.fromRGB(0,170,0)
+progressFill.BackgroundColor3 = Color3.fromHex("#214b77")
 
 progressText = Instance.new("TextLabel", barBg)
 progressText.Size = UDim2.new(1,0,1,0)
@@ -271,7 +274,7 @@ startBtn.Position = UDim2.new(0.1,0,0,60)
 startBtn.Text = "Start"
 startBtn.Font = Enum.Font.SourceSansBold
 startBtn.TextSize = 16
-startBtn.BackgroundColor3 = Color3.fromRGB(0,170,0)
+startBtn.BackgroundColor3 = Color3.fromHex("#264878")
 startBtn.TextColor3 = Color3.new(1,1,1)
 
 startBtn.MouseButton1Click:Connect(function()
@@ -280,7 +283,7 @@ startBtn.MouseButton1Click:Connect(function()
 		restoreCamera()
 		running = false
 		startBtn.Text = "Start"
-		startBtn.BackgroundColor3 = Color3.fromRGB(0,170,0)
+		startBtn.BackgroundColor3 = Color3.fromHex("#264878")
 		setProgress(0,"Idle",false)
 	else
 		task.spawn(runLoader)
