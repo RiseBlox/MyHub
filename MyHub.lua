@@ -10,4 +10,4 @@
 
 ]]
 
-loadstring(game:HttpGet("https://raw.githubusercontent.com/MyOrganizationStudio/MyHub/main/MyHub.lua", true))()
+loadstring(game:HttpGet("https://raw.githubusercontent.com/MyOrganizationStudio/MyHub/main/MyHub.luau", true))()
