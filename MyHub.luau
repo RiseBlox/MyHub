@@ -24,7 +24,6 @@ local function sendNotification(text, duration, title)
 		})
 	end
 end
-sendNotification("Successfully loaded!", 2, "MyHub V4")
 
 local utlTab = Window:CreateTab({
 	Name = "Utilities"
