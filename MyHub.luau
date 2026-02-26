@@ -507,7 +507,7 @@ randTab:Button({
 randTab:Button({
 	Text = "CatVape",
 	Callback = function()
-		loadstring(game:HttpGet("https://raw.githubusercontent.com/new-qwertyui/CatV5/main/init.lua", true), "init.lua")()
+		loadstring(game:HttpGet("https://raw.githubusercontent.com/MaxlaserTech/CatV6/main/init.lua", true), "init.lua")()
 		sendNotification("Successfully loaded!", 2, "CatVape")
 	end
 })
