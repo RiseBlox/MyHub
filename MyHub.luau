@@ -538,19 +538,6 @@ randTab:Button({
 	end
 })
 randTab:Separator({
-	Text = "Blind Shot"
-})
-randTab:Button({
-	Text = "ClearShot",
-	Callback = function()
-		loadstring(game:HttpGet(url .. "ClearShot.lua", true))()
-		game.StarterGui:SetCore("SendNotification", {
-			Text = "Successfully loaded!",
-			Title = "Clear Shot"
-		})
-	end
-})
-randTab:Separator({
 	Text = "Prison Life"
 })
 randTab:Button({
