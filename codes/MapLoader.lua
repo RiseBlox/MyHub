@@ -3,7 +3,6 @@ local Workspace = game:GetService("Workspace")
 local TweenService = game:GetService("TweenService")
 local RunService = game:GetService("RunService")
 local ContentProvider = game:GetService("ContentProvider")
-local Debris = game:GetService("Debris")
 
 local player = Players.LocalPlayer
 local camera = Workspace.CurrentCamera
@@ -101,7 +100,6 @@ local STABILITY_CHECK_INTERVAL = 0.5
 local STABILITY_REQUIRED_TIME = 2
 local MAX_CHUNK_RETRIES = 3
 local GROWTH_THRESHOLD = 5
-local MAX_REQUESTS_PER_SECOND = 8
 
 local GAME_ID = game.PlaceId
 local JAILBREAK_ID = 606849621
@@ -176,10 +174,8 @@ end
 
 local function calculateOptimalSpacing(dimensions)
 	local area = dimensions.X * dimensions.Z
-
 	local targetPoints = 200
 	local spacing = math.sqrt(area / targetPoints)
-
 	return math.clamp(spacing, 300, 1000)
 end
 
@@ -215,55 +211,6 @@ local function shouldUseBoundedMode(bounds)
 	return false, nil
 end
 
-local PerformanceTracker = {
-	metrics = {},
-	lastSample = tick(),
-	sampleInterval = 0.5,
-	thresholds = {
-		fps = 25,
-		memory = 3500,
-		loadTimeMs = 10000
-	}
-}
-
-function PerformanceTracker:sample()
-	local now = tick()
-	if now - self.lastSample < self.sampleInterval then
-		return self.metrics
-	end
-
-	self.lastSample = now
-	self.metrics = {
-		fps = math.floor(1 / RunService.RenderStepped:Wait()),
-		memory = math.floor(gcinfo()),
-		timestamp = now
-	}
-	return self.metrics
-end
-
-function PerformanceTracker:shouldThrottle()
-	local sample = self:sample()
-	return sample.fps < self.thresholds.fps or sample.memory > self.thresholds.memory
-end
-
-function PerformanceTracker:getStatus()
-	local sample = self:sample()
-	return string.format("FPS: %d | MEM: %dMB", sample.fps, sample.memory)
-end
-
-local StreamingMetrics = {
-	totalChunks = 0,
-	completedChunks = 0,
-	failedChunks = 0,
-	retriedChunks = 0,
-	verifiedLoads = 0,
-	timeouts = 0
-}
-
-local failedChunksQueue = {}
-local lastTweenTime = 0
-local MIN_TWEEN_INTERVAL = 1 / MAX_REQUESTS_PER_SECOND
-
 local HEIGHT_VEC = Vector3.new(0, HEIGHT_OFFSET, 0)
 local DUMMY_FOLDER = Instance.new("Folder")
 
@@ -277,7 +224,7 @@ local originalAnchor
 local savedFramePos
 
 local gui, frame, content
-local barBg, progressFill, progressText, perfText, metricsText
+local barBg, progressFill, progressText
 local actionBtn, strategyBtn
 
 local globalStartTime
@@ -321,17 +268,6 @@ local function setProgress(alpha, text)
 	progressFill.Size = UDim2.new(math.clamp(alpha, 0, 1), 0, 1, 0)
 	progressText.Text = text
 	barBg.BackgroundColor3 = Color3.fromHex("#1d2f49")
-	perfText.Text = PerformanceTracker:getStatus()
-
-	if metricsText then
-		metricsText.Text = string.format(
-			"Verified: %d | Retries: %d | Failed: %d | Timeouts: %d",
-			StreamingMetrics.verifiedLoads,
-			StreamingMetrics.retriedChunks,
-			StreamingMetrics.failedChunks,
-			StreamingMetrics.timeouts
-		)
-	end
 end
 
 local function cameraAboveLookingAt(targetPos)
@@ -349,14 +285,6 @@ local function randomBop(center)
 end
 
 local function tweenTo(targetPos)
-
-	local now = tick()
-	local elapsed = now - lastTweenTime
-	if elapsed < MIN_TWEEN_INTERVAL then
-		task.wait(MIN_TWEEN_INTERVAL - elapsed)
-	end
-	lastTweenTime = tick()
-
 	local cf = cameraAboveLookingAt(targetPos)
 	local tween = TweenService:Create(
 		camera,
@@ -373,8 +301,6 @@ local function generateBoundedGrid(config)
 	local spacing = config.gridSpacing
 	local heightOffset = config.heightOffset or HEIGHT_OFFSET
 
-	local centerX = (bounds.topLeft.X + bounds.topRight.X + bounds.bottomLeft.X + bounds.bottomRight.X) / 4
-	local centerZ = (bounds.topLeft.Z + bounds.topRight.Z + bounds.bottomLeft.Z + bounds.bottomRight.Z) / 4
 	local avgY = (bounds.topLeft.Y + bounds.topRight.Y + bounds.bottomLeft.Y + bounds.bottomRight.Y) / 4
 
 	local minX = math.min(bounds.topLeft.X, bounds.topRight.X, bounds.bottomLeft.X, bounds.bottomRight.X)
@@ -386,28 +312,11 @@ local function generateBoundedGrid(config)
 
 	for x = minX, maxX, spacing do
 		for z = minZ, maxZ, spacing do
-			local position = Vector3.new(x, avgY, z)
-
-			local visual = Instance.new("Part")
-			visual.Name = "ChunkVisual"
-			visual.Anchored = true
-			visual.CanCollide = false
-			visual.CastShadow = false
-			visual.Shape = Enum.PartType.Ball
-			visual.Material = Enum.Material.ForceField
-			visual.Size = Vector3.new(50, 50, 50)
-			visual.Position = position
-			visual.Color = Color3.fromRGB(255, 150, 0)
-			visual.Transparency = 0.85
-			visual.Parent = Workspace
-
 			table.insert(centers, {
-				position = position,
+				position = Vector3.new(x, avgY, z),
 				parts = {},
 				retries = 0,
-				maxRetries = MAX_CHUNK_RETRIES,
-				visual = visual,
-				verified = false
+				maxRetries = MAX_CHUNK_RETRIES
 			})
 		end
 	end
@@ -474,12 +383,10 @@ local function verifyChunkStable(position, radius)
 		lastCount = currentCount
 
 		if stableTime >= STABILITY_REQUIRED_TIME then
-			StreamingMetrics.verifiedLoads += 1
 			return true
 		end
 	end
 
-	StreamingMetrics.timeouts += 1
 	return maxCount > 0
 end
 
@@ -590,28 +497,11 @@ local function buildCenters(parts, chunkSizeOverride)
 
 	local centers = {}
 	for _, b in pairs(buckets) do
-		local center = b.sum / b.count
-
-		local visual = Instance.new("Part")
-		visual.Name = "ChunkVisual"
-		visual.Anchored = true
-		visual.CanCollide = false
-		visual.CastShadow = false
-		visual.Shape = Enum.PartType.Ball
-		visual.Material = Enum.Material.ForceField
-		visual.Size = Vector3.new(50, 50, 50)
-		visual.Position = center
-		visual.Color = Color3.fromRGB(255, 150, 0)
-		visual.Transparency = 0.85
-		visual.Parent = Workspace
-
 		table.insert(centers, {
-			position = center,
+			position = b.sum / b.count,
 			parts = b.parts,
 			retries = 0,
-			maxRetries = MAX_CHUNK_RETRIES,
-			visual = visual,
-			verified = false
+			maxRetries = MAX_CHUNK_RETRIES
 		})
 	end
 
@@ -627,28 +517,11 @@ local function expandCenters(centers, scale)
 
 	local expanded = {}
 	for _, c in ipairs(centers) do
-		local newPos = origin + (c.position - origin) * scale
-
-		local visual = Instance.new("Part")
-		visual.Name = "ChunkVisual"
-		visual.Anchored = true
-		visual.CanCollide = false
-		visual.CastShadow = false
-		visual.Shape = Enum.PartType.Ball
-		visual.Material = Enum.Material.ForceField
-		visual.Size = Vector3.new(50, 50, 50)
-		visual.Position = newPos
-		visual.Color = Color3.fromRGB(255, 150, 0)
-		visual.Transparency = 0.85
-		visual.Parent = Workspace
-
 		table.insert(expanded, {
-			position = newPos,
+			position = origin + (c.position - origin) * scale,
 			parts = c.parts,
 			retries = 0,
-			maxRetries = MAX_CHUNK_RETRIES,
-			visual = visual,
-			verified = false
+			maxRetries = MAX_CHUNK_RETRIES
 		})
 	end
 
@@ -683,50 +556,14 @@ local function executePhase1(centers)
 	for i, center in ipairs(centers) do
 		if stopRequested then return false end
 
-		if center.visual then
-			center.visual.Color = Color3.fromRGB(0, 100, 255)
-		end
-
 		globalDone += 1
 		camera.CFrame = cameraAboveLookingAt(center.position)
+		task.wait(currentStrategy.fastWait)
 
-		if PerformanceTracker:shouldThrottle() then
-			task.wait(currentStrategy.fastWait * 1.5)
-		else
-			task.wait(currentStrategy.fastWait)
-		end
-
-		local verified = true
 		if not skipStability then
-			verified = verifyChunkStable(center.position, 100)
-			center.verified = verified
-		end
-
-		if verified then
-			if center.visual then
-				center.visual.Color = Color3.fromRGB(0, 255, 0)
-				center.visual.Transparency = 0.95
-				Debris:AddItem(center.visual, 5)
-			end
-			if not skipStability then
+			local verified = verifyChunkStable(center.position, 100)
+			if verified then
 				preloadChunkAssets(center.parts)
-			end
-		else
-
-			if center.visual then
-				center.visual.Color = Color3.fromRGB(255, 0, 0)
-			end
-
-			if center.retries < center.maxRetries then
-				center.retries += 1
-				StreamingMetrics.retriedChunks += 1
-				table.insert(failedChunksQueue, center)
-			else
-				StreamingMetrics.failedChunks += 1
-				if center.visual then
-					center.visual.Transparency = 0.5
-					Debris:AddItem(center.visual, 10)
-				end
 			end
 		end
 
@@ -756,54 +593,14 @@ local function executePhase2(columns)
 		for _, c in ipairs(list) do
 			if stopRequested then return false end
 
-			if c.visual then
-				c.visual.Color = Color3.fromRGB(0, 100, 255)
-			end
-
 			globalDone += 1
 
-			local success = pcall(function()
+			pcall(function()
 				tweenTo(c.position)
 			end)
 
-			if success then
-				local verified = true
-				if not skipStability then
-					verified = verifyChunkStable(c.position, 100)
-					c.verified = verified
-				end
-
-				if verified then
-					if c.visual then
-						c.visual.Color = Color3.fromRGB(0, 255, 0)
-						c.visual.Transparency = 0.95
-						Debris:AddItem(c.visual, 5)
-					end
-				else
-					if c.visual then
-						c.visual.Color = Color3.fromRGB(255, 0, 0)
-					end
-
-					if c.retries < c.maxRetries then
-						c.retries += 1
-						StreamingMetrics.retriedChunks += 1
-						table.insert(failedChunksQueue, c)
-					else
-						StreamingMetrics.failedChunks += 1
-						if c.visual then
-							Debris:AddItem(c.visual, 10)
-						end
-					end
-				end
-			else
-
-				if c.retries < c.maxRetries then
-					c.retries += 1
-					StreamingMetrics.retriedChunks += 1
-					table.insert(failedChunksQueue, c)
-				else
-					StreamingMetrics.failedChunks += 1
-				end
+			if not skipStability then
+				verifyChunkStable(c.position, 100)
 			end
 
 			setProgress(
@@ -831,51 +628,13 @@ local function executePhase3(columns)
 		for _, c in ipairs(list) do
 			if stopRequested then return false end
 
-			if c.visual then
-				c.visual.Color = Color3.fromRGB(0, 100, 255)
-			end
-
 			globalDone += 1
 
-			local success = pcall(function()
+			pcall(function()
 				tweenTo(c.position)
 			end)
 
-			if success then
-				local verified = verifyChunkStable(c.position, 100)
-				c.verified = verified
-
-				if verified then
-					if c.visual then
-						c.visual.Color = Color3.fromRGB(0, 255, 0)
-						c.visual.Transparency = 0.95
-						Debris:AddItem(c.visual, 5)
-					end
-				else
-					if c.visual then
-						c.visual.Color = Color3.fromRGB(255, 0, 0)
-					end
-
-					if c.retries < c.maxRetries then
-						c.retries += 1
-						StreamingMetrics.retriedChunks += 1
-						table.insert(failedChunksQueue, c)
-					else
-						StreamingMetrics.failedChunks += 1
-						if c.visual then
-							Debris:AddItem(c.visual, 10)
-						end
-					end
-				end
-			else
-				if c.retries < c.maxRetries then
-					c.retries += 1
-					StreamingMetrics.retriedChunks += 1
-					table.insert(failedChunksQueue, c)
-				else
-					StreamingMetrics.failedChunks += 1
-				end
-			end
+			verifyChunkStable(c.position, 100)
 
 			setProgress(
 				globalDone / totalWorkItems,
@@ -906,62 +665,9 @@ local function executeRoaming(centers)
 	return true
 end
 
-local function executeRetryPass()
-	if #failedChunksQueue == 0 then return true end
-
-	setProgress(globalDone / totalWorkItems, "Retry Pass | Processing failed chunks...")
-
-	local retryAttempts = 0
-	local maxRetryAttempts = #failedChunksQueue
-
-	while #failedChunksQueue > 0 and retryAttempts < maxRetryAttempts do
-		if stopRequested then return false end
-
-		local chunk = table.remove(failedChunksQueue, 1)
-		retryAttempts += 1
-
-		if chunk.visual then
-			chunk.visual.Color = Color3.fromRGB(255, 165, 0)  -- Orange for retry
-		end
-
-		camera.CFrame = cameraAboveLookingAt(chunk.position)
-		task.wait(currentStrategy.fastWait)
-
-		local verified = verifyChunkStable(chunk.position, 100)
-
-		if verified then
-			StreamingMetrics.completedChunks += 1
-			if chunk.visual then
-				chunk.visual.Color = Color3.fromRGB(0, 255, 0)
-				chunk.visual.Transparency = 0.95
-				Debris:AddItem(chunk.visual, 5)
-			end
-		else
-			StreamingMetrics.failedChunks += 1
-			if chunk.visual then
-				chunk.visual.Color = Color3.fromRGB(100, 0, 0)
-				Debris:AddItem(chunk.visual, 10)
-			end
-		end
-
-		setProgress(globalDone / totalWorkItems,
-			string.format("Retry Pass | %d/%d processed", retryAttempts, maxRetryAttempts))
-	end
-
-	return true
-end
-
 local function runLoader()
 	running = true
 	stopRequested = false
-
-	StreamingMetrics.totalChunks = 0
-	StreamingMetrics.completedChunks = 0
-	StreamingMetrics.failedChunks = 0
-	StreamingMetrics.retriedChunks = 0
-	StreamingMetrics.verifiedLoads = 0
-	StreamingMetrics.timeouts = 0
-	failedChunksQueue = {}
 
 	local character = player.Character
 	local humanoidRootPart = character and character:FindFirstChild("HumanoidRootPart")
@@ -991,7 +697,6 @@ local function runLoader()
 
 		if detectedBounds then
 			local useBounded, autoConfig = shouldUseBoundedMode(detectedBounds)
-
 			if useBounded then
 				currentGameConfig = autoConfig
 			end
@@ -1023,7 +728,15 @@ local function runLoader()
 		local p2Total = 0
 		for _, col in pairs(columns) do p2Total += #col end
 
-		totalWorkItems = p1Total + p2Total
+		local p3Total = 0
+		local phase3Centers, phase3Columns
+		if not currentStrategy.skipPhase3 then
+			phase3Centers = expandCenters(chunkCenters, PHASE3_SPACE_SCALE)
+			phase3Columns = buildColumns(phase3Centers, currentGameConfig.chunkSize)
+			for _, col in pairs(phase3Columns) do p3Total += #col end
+		end
+
+		totalWorkItems = p1Total + p2Total + p3Total
 		globalDone = 0
 		globalStartTime = tick()
 
@@ -1031,22 +744,15 @@ local function runLoader()
 		local originalSkipPhase3 = currentStrategy.skipPhase3
 		local originalSweepTween = currentStrategy.sweepTween
 
-		if currentGameConfig.fastWait then
-			currentStrategy.fastWait = currentGameConfig.fastWait
-		end
-		if currentGameConfig.skipPhase3 ~= nil then
-			currentStrategy.skipPhase3 = currentGameConfig.skipPhase3
-		end
-		if currentGameConfig.sweepTween then
-			currentStrategy.sweepTween = currentGameConfig.sweepTween
-		end
+		if currentGameConfig.fastWait then currentStrategy.fastWait = currentGameConfig.fastWait end
+		if currentGameConfig.skipPhase3 ~= nil then currentStrategy.skipPhase3 = currentGameConfig.skipPhase3 end
+		if currentGameConfig.sweepTween then currentStrategy.sweepTween = currentGameConfig.sweepTween end
 
 		local success = executePhase1(chunkCenters)
 		if not success then
 			currentStrategy.fastWait = originalFastWait
 			currentStrategy.skipPhase3 = originalSkipPhase3
 			currentStrategy.sweepTween = originalSweepTween
-
 			restoreCamera()
 			running = false
 			StateMachine:transition(States.IDLE)
@@ -1068,13 +774,12 @@ local function runLoader()
 			return
 		end
 
-		currentStrategy.fastWait = originalFastWait
-		currentStrategy.skipPhase3 = originalSkipPhase3
-		currentStrategy.sweepTween = originalSweepTween
-
-		if #failedChunksQueue > 0 then
-			success = executeRetryPass()
+		if not currentStrategy.skipPhase3 then
+			success = executePhase3(phase3Columns)
 			if not success then
+				currentStrategy.fastWait = originalFastWait
+				currentStrategy.skipPhase3 = originalSkipPhase3
+				currentStrategy.sweepTween = originalSweepTween
 				restoreCamera()
 				running = false
 				StateMachine:transition(States.IDLE)
@@ -1083,6 +788,10 @@ local function runLoader()
 				return
 			end
 		end
+
+		currentStrategy.fastWait = originalFastWait
+		currentStrategy.skipPhase3 = originalSkipPhase3
+		currentStrategy.sweepTween = originalSweepTween
 
 		local phaseElapsed = tick() - globalStartTime
 		print(string.format("[MapLoader] Phases complete in %.1fs - starting roaming", phaseElapsed))
@@ -1093,7 +802,6 @@ local function runLoader()
 		running = false
 		StateMachine:transition(States.IDLE)
 		actionBtn.Text = "Start"
-		local elapsed = tick() - globalStartTime
 		setProgress(1, string.format("Complete | %s", currentGameConfig.name))
 
 		if not GameConfigs[GAME_ID] then
@@ -1180,18 +888,6 @@ local function runLoader()
 		end
 	end
 
-	if #failedChunksQueue > 0 then
-		success = executeRetryPass()
-		if not success then
-			restoreCamera()
-			running = false
-			StateMachine:transition(States.IDLE)
-			actionBtn.Text = "Start"
-			setProgress(0, "Stopped")
-			return
-		end
-	end
-
 	executeRoaming(chunkCenters)
 
 	restoreCamera()
@@ -1201,14 +897,16 @@ local function runLoader()
 	setProgress(0, "Complete")
 end
 
+-- UI
+
 gui = Instance.new("ScreenGui", player.PlayerGui)
 gui.Name = "MapLoaderPro"
 gui.ResetOnSpawn = false
 gui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
 
 frame = Instance.new("Frame", gui)
-frame.Size = UDim2.new(0, 340, 0, 212)
-frame.Position = UDim2.new(0.5, -170, 0.5, -107.5)
+frame.Size = UDim2.new(0, 340, 0, 165)
+frame.Position = UDim2.new(0.5, -170, 0.5, -70)
 frame.BackgroundColor3 = Color3.fromHex("#151618")
 frame.BorderSizePixel = 0
 frame.Active = true
@@ -1248,7 +946,7 @@ content.BorderSizePixel = 0
 
 barBg = Instance.new("Frame", content)
 barBg.Size = UDim2.new(0.9, 0, 0, 20)
-barBg.Position = UDim2.new(0.05, 0, 0, 20)
+barBg.Position = UDim2.new(0.05, 0, 0, 14)
 barBg.BackgroundColor3 = Color3.fromHex("#1d2f49")
 barBg.BorderSizePixel = 0
 
@@ -1272,31 +970,9 @@ progressText.TextSize = 12
 progressText.TextColor3 = Color3.new(1, 1, 1)
 progressText.BorderSizePixel = 0
 
-perfText = Instance.new("TextLabel", content)
-perfText.Size = UDim2.new(0.9, 0, 0, 16)
-perfText.Position = UDim2.new(0.05, 0, 0, 61)
-perfText.BackgroundTransparency = 1
-perfText.Text = "FPS: -- | MEM: --MB"
-perfText.Font = Enum.Font.BuilderSansExtraBold
-perfText.TextSize = 11
-perfText.TextColor3 = Color3.fromHex("#ffffff")
-perfText.TextXAlignment = Enum.TextXAlignment.Left
-perfText.BorderSizePixel = 0
-
-metricsText = Instance.new("TextLabel", content)
-metricsText.Size = UDim2.new(0.9, 0, 0, 16)
-metricsText.Position = UDim2.new(0.05, 0, 0, 44)
-metricsText.BackgroundTransparency = 1
-metricsText.Text = "Verified: 0 | Retries: 0 | Failed: 0 | Timeouts: 0"
-metricsText.Font = Enum.Font.BuilderSansExtraBold
-metricsText.TextSize = 11
-metricsText.TextColor3 = Color3.fromHex("#ffffff")
-metricsText.TextXAlignment = Enum.TextXAlignment.Left
-metricsText.BorderSizePixel = 0
-
 strategyBtn = Instance.new("TextButton", content)
 strategyBtn.Size = UDim2.new(0.9, 0, 0, 32)
-strategyBtn.Position = UDim2.new(0.05, 0, 0, 82)
+strategyBtn.Position = UDim2.new(0.05, 0, 0, 42)
 strategyBtn.Text = "Strategy: " .. currentStrategy.name
 strategyBtn.Font = Enum.Font.BuilderSansExtraBold
 strategyBtn.TextSize = 13
@@ -1310,7 +986,7 @@ stratCorner.CornerRadius = UDim.new(0, 0)
 
 actionBtn = Instance.new("TextButton", content)
 actionBtn.Size = UDim2.new(0.9, 0, 0, 32)
-actionBtn.Position = UDim2.new(0.05, 0, 0, 122)
+actionBtn.Position = UDim2.new(0.05, 0, 0, 82)
 actionBtn.Text = "Start"
 actionBtn.Font = Enum.Font.BuilderSansExtraBold
 actionBtn.TextSize = 15
@@ -1335,7 +1011,6 @@ local BTN_STRATEGY_HOVER = Color3.fromHex("#4296fa")
 local BTN_STRATEGY_DOWN = Color3.fromHex("#1b87fa")
 
 local actionHovering = false
-local pauseHovering = false
 local strategyHovering = false
 
 actionBtn.MouseEnter:Connect(function()
@@ -1367,37 +1042,27 @@ strategyBtn.MouseLeave:Connect(function()
 end)
 
 actionBtn.MouseButton1Down:Connect(function()
-    if running then
-        actionBtn.BackgroundColor3 = BTN_STOP_DOWN
-    else
-        actionBtn.BackgroundColor3 = BTN_ACTION_DOWN
-    end
+	if running then
+		actionBtn.BackgroundColor3 = BTN_STOP_DOWN
+	else
+		actionBtn.BackgroundColor3 = BTN_ACTION_DOWN
+	end
 end)
+
 actionBtn.MouseButton1Up:Connect(function()
-    if running then
-        if actionHovering then
-            actionBtn.BackgroundColor3 = BTN_STOP_HOVER
-        else
-            actionBtn.BackgroundColor3 = BTN_STOP_DEFAULT
-        end
-    else
-        if actionHovering then
-            actionBtn.BackgroundColor3 = BTN_ACTION_HOVER
-        else
-            actionBtn.BackgroundColor3 = BTN_ACTION_DEFAULT
-        end
-    end
+	if running then
+		actionBtn.BackgroundColor3 = actionHovering and BTN_STOP_HOVER or BTN_STOP_DEFAULT
+	else
+		actionBtn.BackgroundColor3 = actionHovering and BTN_ACTION_HOVER or BTN_ACTION_DEFAULT
+	end
 end)
 
 strategyBtn.MouseButton1Down:Connect(function()
-    strategyBtn.BackgroundColor3 = BTN_STRATEGY_DOWN
+	strategyBtn.BackgroundColor3 = BTN_STRATEGY_DOWN
 end)
+
 strategyBtn.MouseButton1Up:Connect(function()
-    if strategyHovering then
-        strategyBtn.BackgroundColor3 = BTN_STRATEGY_HOVER
-    else
-        strategyBtn.BackgroundColor3 = BTN_STRATEGY_DEFAULT
-    end
+	strategyBtn.BackgroundColor3 = strategyHovering and BTN_STRATEGY_HOVER or BTN_STRATEGY_DEFAULT
 end)
 
 actionBtn.MouseButton1Click:Connect(function()
@@ -1438,17 +1103,8 @@ minimize.MouseButton1Click:Connect(function()
 		frame.Position = UDim2.new(0, 10, 1, -46)
 	else
 		content.Visible = true
-		frame.Size = UDim2.new(0, 340, 0, 212)
+		frame.Size = UDim2.new(0, 340, 0, 165)
 		frame.Position = savedFramePos or frame.Position
-	end
-end)
-
-task.spawn(function()
-	while true do
-		task.wait(0.5)
-		if running then
-			PerformanceTracker:sample()
-		end
 	end
 end)
 
