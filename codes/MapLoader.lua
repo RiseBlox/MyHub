@@ -17,7 +17,6 @@ local States = {
 	STREAMING = "streaming",
 	PHASE1 = "phase1",
 	PHASE2 = "phase2",
-	PHASE3 = "phase3",
 	ROAMING = "roaming",
 	ERROR = "error"
 }
@@ -30,8 +29,7 @@ local StateMachine = {
 		[States.INITIALIZING] = {States.STREAMING, States.PHASE1, States.ERROR, States.IDLE},
 		[States.STREAMING] = {States.PHASE1, States.ERROR, States.IDLE},
 		[States.PHASE1] = {States.PHASE2, States.ERROR, States.IDLE},
-		[States.PHASE2] = {States.PHASE3, States.ROAMING, States.ERROR, States.IDLE},
-		[States.PHASE3] = {States.ROAMING, States.ERROR, States.IDLE},
+		[States.PHASE2] = {States.ROAMING, States.ERROR, States.IDLE},
 		[States.ROAMING] = {States.IDLE, States.ERROR},
 		[States.ERROR] = {States.IDLE}
 	}
@@ -53,42 +51,31 @@ function StateMachine:canStop()
 end
 
 local LoadStrategies = {
-	SPEED = {
-		name = "Speed",
-		chunkSize = 1000,
-		skipPhase3 = true,
-		renderQuality = "Low",
-		batchSize = 200,
-		fastWait = 0.05,
-		sweepTween = 0.6,
-		preloadAssets = false
-	},
-	BALANCED = {
-		name = "Balanced",
-		chunkSize = 500,
-		skipPhase3 = false,
-		renderQuality = "Medium",
-		batchSize = 150,
-		fastWait = 0.08,
-		sweepTween = 0.85,
-		preloadAssets = true
-	},
-	QUALITY = {
-		name = "Quality",
+	SLOW = {
+		name = "Slow",
 		chunkSize = 250,
-		skipPhase3 = false,
-		renderQuality = "High",
+		batchSize = 100,
+		fastWait = 2.5,
+		sweepTween = 1.2,
+		hopInterval = 0.35,
+		hopRadius = 60,
+		hopYRange = 20,
+	},
+	FAST = {
+		name = "Fast",
+		chunkSize = 250,
 		batchSize = 100,
 		fastWait = 0.12,
 		sweepTween = 1.2,
-		preloadAssets = true
+		hopInterval = 0.05,
+		hopRadius = 60,
+		hopYRange = 20,
 	}
 }
 
-local currentStrategy = LoadStrategies.QUALITY
+local currentStrategy = LoadStrategies.SLOW
 
 local HEIGHT_OFFSET = 175
-local PHASE3_SPACE_SCALE = 1.5
 local SWEEP_WAIT = 0.15
 local ROAM_RADIUS = 80
 local ROAM_BOPS = 4
@@ -117,7 +104,6 @@ local GameConfigs = {
 		chunkSize = 800,
 		gridSpacing = 700,
 		heightOffset = 150,
-		skipPhase3 = false,
 		skipStabilityCheck = true,
 		fastWait = 0.04,
 		sweepTween = 0.4,
@@ -126,6 +112,136 @@ local GameConfigs = {
 }
 
 local currentGameConfig = GameConfigs[GAME_ID]
+
+-- cfly state
+local cflyLoop = nil
+local cflyActive = false
+local cflyPaused = false
+local cflyRespawnConn = nil
+
+local function applyCflyToCharacter(character)
+	if not character then return end
+	local humanoid = character:FindFirstChildOfClass("Humanoid")
+	local head = character:FindFirstChild("Head")
+	local hrp = character:FindFirstChild("HumanoidRootPart")
+	if humanoid then humanoid.PlatformStand = true end
+	if hrp then hrp.Anchored = true end
+	if head then head.Anchored = true end
+end
+
+local function startCfly()
+	if cflyActive then return end
+	cflyActive = true
+	cflyPaused = false
+
+	applyCflyToCharacter(player.Character)
+
+	-- reapply on every respawn while cfly is active
+	if cflyRespawnConn then cflyRespawnConn:Disconnect() end
+	cflyRespawnConn = player.CharacterAdded:Connect(function(newChar)
+		if not cflyActive then return end
+		newChar:WaitForChild("HumanoidRootPart", 10)
+		newChar:WaitForChild("Head", 10)
+		newChar:WaitForChild("Humanoid", 10)
+		task.wait(0.1)
+		applyCflyToCharacter(newChar)
+	end)
+
+	if cflyLoop then cflyLoop:Disconnect() end
+
+	cflyLoop = RunService.Heartbeat:Connect(function(dt)
+		-- skip tick if paused for a tppos
+		if cflyPaused then return end
+
+		local char = player.Character
+		if not char then return end
+		local hum = char:FindFirstChildOfClass("Humanoid")
+		local h = char:FindFirstChild("Head")
+		if not hum or not h then return end
+
+		local moveDirection = hum.MoveDirection * (50 * dt)
+		local headCFrame = h.CFrame
+		local cam = workspace.CurrentCamera
+		local camCFrame = cam.CFrame
+		local camOffset = headCFrame:ToObjectSpace(camCFrame).Position
+		camCFrame = camCFrame * CFrame.new(-camOffset.X, -camOffset.Y, -camOffset.Z + 1)
+		local camPos = camCFrame.Position
+		local headPos = headCFrame.Position
+		local objVel = CFrame.new(camPos, Vector3.new(headPos.X, camPos.Y, headPos.Z)):VectorToObjectSpace(moveDirection)
+		h.CFrame = CFrame.new(headPos) * (camCFrame - camPos) * CFrame.new(objVel)
+	end)
+end
+
+local function stopCfly()
+	if not cflyActive then return end
+	cflyActive = false
+	cflyPaused = false
+
+	if cflyLoop then
+		cflyLoop:Disconnect()
+		cflyLoop = nil
+	end
+
+	if cflyRespawnConn then
+		cflyRespawnConn:Disconnect()
+		cflyRespawnConn = nil
+	end
+
+	local character = player.Character
+	if not character then return end
+	local humanoid = character:FindFirstChildOfClass("Humanoid")
+	local head = character:FindFirstChild("Head")
+	local hrp = character:FindFirstChild("HumanoidRootPart")
+	if humanoid then humanoid.PlatformStand = false end
+	if hrp then hrp.Anchored = false end
+	if head then head.Anchored = false end
+end
+
+-- tppos: pause cfly heartbeat, move both HRP and Head, then resume
+local function tpCharTo(pos)
+	local character = player.Character
+	if not character then return end
+	local hrp = character:FindFirstChild("HumanoidRootPart")
+	local head = character:FindFirstChild("Head")
+	if not hrp then return end
+
+	cflyPaused = true
+	hrp.CFrame = CFrame.new(pos)
+	if head then
+		head.CFrame = CFrame.new(pos + Vector3.new(0, 1.5, 0))
+	end
+	-- give the engine one frame to settle the new position before
+	-- the cfly heartbeat loop can overwrite it again
+	RunService.Heartbeat:Wait()
+	cflyPaused = false
+end
+
+-- hop the character randomly around a chunk center for the dwell duration
+local function hopAroundChunk(chunkPos, duration)
+	local elapsed = 0
+	local hopInterval = currentStrategy.hopInterval
+	local hopRadius = currentStrategy.hopRadius
+	local hopYRange = currentStrategy.hopYRange
+
+	tpCharTo(chunkPos)
+
+	while elapsed < duration do
+		if stopRequested then return end
+
+		local offsetX = math.random(-hopRadius * 10, hopRadius * 10) / 10
+		local offsetY = math.random(-hopYRange * 10, hopYRange * 10) / 10
+		local offsetZ = math.random(-hopRadius * 10, hopRadius * 10) / 10
+
+		tpCharTo(Vector3.new(
+			chunkPos.X + offsetX,
+			chunkPos.Y + offsetY,
+			chunkPos.Z + offsetZ
+		))
+
+		task.wait(hopInterval)
+		elapsed += hopInterval
+	end
+end
 
 local function calculateMapBounds()
 	print("[MapLoader] Calculating map bounds...")
@@ -155,9 +271,7 @@ local function calculateMapBounds()
 		end
 	end
 
-	if minX == math.huge then
-		return nil
-	end
+	if minX == math.huge then return nil end
 
 	local avgY = (minY + maxY) / 2
 
@@ -197,7 +311,6 @@ local function shouldUseBoundedMode(bounds)
 			chunkSize = math.clamp(spacing * 1.2, 400, 1000),
 			gridSpacing = spacing,
 			heightOffset = 150,
-			skipPhase3 = dims.X > 5000 or dims.Z > 5000,
 			skipStabilityCheck = true,
 			fastWait = 0.04,
 			sweepTween = 0.5,
@@ -220,7 +333,6 @@ local minimized = false
 
 local originalCFrame
 local originalCameraType
-local originalAnchor
 local savedFramePos
 
 local gui, frame, content
@@ -241,14 +353,9 @@ end
 
 local function restoreCamera()
 	setRendering(true)
+	stopCfly()
 	if originalCameraType then camera.CameraType = originalCameraType end
 	if originalCFrame then camera.CFrame = originalCFrame end
-
-	local character = player.Character
-	local humanoidRootPart = character and character:FindFirstChild("HumanoidRootPart")
-	if humanoidRootPart and originalAnchor ~= nil then
-		humanoidRootPart.Anchored = originalAnchor
-	end
 end
 
 local function formatETA(startTime, done, total)
@@ -299,7 +406,6 @@ end
 local function generateBoundedGrid(config)
 	local bounds = config.bounds
 	local spacing = config.gridSpacing
-	local heightOffset = config.heightOffset or HEIGHT_OFFSET
 
 	local avgY = (bounds.topLeft.Y + bounds.topRight.Y + bounds.bottomLeft.Y + bounds.bottomRight.Y) / 4
 
@@ -358,9 +464,7 @@ local function verifyChunkStable(position, radius)
 	end)
 
 	while tick() - startTime < STREAMING_TIMEOUT do
-		if stopRequested then
-			return false
-		end
+		if stopRequested then return false end
 
 		task.wait(STABILITY_CHECK_INTERVAL)
 
@@ -369,7 +473,6 @@ local function verifyChunkStable(position, radius)
 
 		if delta > 0 then
 			pendingGrowth += delta
-
 			if pendingGrowth >= GROWTH_THRESHOLD then
 				maxCount = math.max(maxCount, currentCount)
 				pendingGrowth = 0
@@ -455,28 +558,6 @@ local function streamParts(callback)
 	return true
 end
 
-local function preloadChunkAssets(parts)
-	if not currentStrategy.preloadAssets then return end
-
-	local assets = {}
-	for _, part in ipairs(parts) do
-		if part:IsA("MeshPart") and part.MeshId ~= "" then
-			table.insert(assets, part.MeshId)
-		end
-		for _, child in ipairs(part:GetChildren()) do
-			if (child:IsA("Texture") or child:IsA("Decal")) and child.Texture ~= "" then
-				table.insert(assets, child.Texture)
-			end
-		end
-	end
-
-	if #assets > 0 then
-		pcall(function()
-			ContentProvider:PreloadAsync(assets)
-		end)
-	end
-end
-
 local function buildCenters(parts, chunkSizeOverride)
 	local size = chunkSizeOverride or chunkSize
 	local buckets = {}
@@ -508,26 +589,6 @@ local function buildCenters(parts, chunkSizeOverride)
 	return centers
 end
 
-local function expandCenters(centers, scale)
-	local origin = Vector3.zero
-	for _, c in ipairs(centers) do
-		origin += c.position
-	end
-	origin /= #centers
-
-	local expanded = {}
-	for _, c in ipairs(centers) do
-		table.insert(expanded, {
-			position = origin + (c.position - origin) * scale,
-			parts = c.parts,
-			retries = 0,
-			maxRetries = MAX_CHUNK_RETRIES
-		})
-	end
-
-	return expanded
-end
-
 local function buildColumns(centers, chunkSizeOverride)
 	local size = chunkSizeOverride or chunkSize
 	local minX = math.huge
@@ -557,19 +618,17 @@ local function executePhase1(centers)
 		if stopRequested then return false end
 
 		globalDone += 1
+
 		camera.CFrame = cameraAboveLookingAt(center.position)
-		task.wait(currentStrategy.fastWait)
+		hopAroundChunk(center.position, currentStrategy.fastWait)
 
 		if not skipStability then
-			local verified = verifyChunkStable(center.position, 100)
-			if verified then
-				preloadChunkAssets(center.parts)
-			end
+			verifyChunkStable(center.position, 100)
 		end
 
 		setProgress(
 			globalDone / totalWorkItems,
-			phaseText("1/4", globalDone, totalWorkItems, formatETA(globalStartTime, globalDone, totalWorkItems))
+			phaseText("1/2", globalDone, totalWorkItems, formatETA(globalStartTime, globalDone, totalWorkItems))
 		)
 	end
 
@@ -599,46 +658,15 @@ local function executePhase2(columns)
 				tweenTo(c.position)
 			end)
 
+			hopAroundChunk(c.position, currentStrategy.fastWait)
+
 			if not skipStability then
 				verifyChunkStable(c.position, 100)
 			end
 
 			setProgress(
 				globalDone / totalWorkItems,
-				phaseText("2/4", globalDone, totalWorkItems, formatETA(globalStartTime, globalDone, totalWorkItems))
-			)
-		end
-	end
-
-	return true
-end
-
-local function executePhase3(columns)
-	if currentStrategy.skipPhase3 then return true end
-	if not StateMachine:transition(States.PHASE3) then return false end
-
-	for col = 0, math.huge do
-		local list = columns[col]
-		if not list then break end
-
-		table.sort(list, function(a, b)
-			return a.position.Y > b.position.Y
-		end)
-
-		for _, c in ipairs(list) do
-			if stopRequested then return false end
-
-			globalDone += 1
-
-			pcall(function()
-				tweenTo(c.position)
-			end)
-
-			verifyChunkStable(c.position, 100)
-
-			setProgress(
-				globalDone / totalWorkItems,
-				phaseText("3/4", globalDone, totalWorkItems, formatETA(globalStartTime, globalDone, totalWorkItems))
+				phaseText("2/2", globalDone, totalWorkItems, formatETA(globalStartTime, globalDone, totalWorkItems))
 			)
 		end
 	end
@@ -649,11 +677,12 @@ end
 local function executeRoaming(centers)
 	if not StateMachine:transition(States.ROAMING) then return false end
 
-	setProgress(1, "Phase 4/4 | Roaming")
+	setProgress(1, "Roaming")
 
 	while not stopRequested do
 		local center = centers[math.random(1, #centers)]
 		tweenTo(center.position)
+		tpCharTo(center.position)
 
 		for i = 1, ROAM_BOPS do
 			if stopRequested then return false end
@@ -669,17 +698,11 @@ local function runLoader()
 	running = true
 	stopRequested = false
 
-	local character = player.Character
-	local humanoidRootPart = character and character:FindFirstChild("HumanoidRootPart")
-
-	if humanoidRootPart then
-		originalAnchor = humanoidRootPart.Anchored
-		humanoidRootPart.Anchored = true
-	end
-
 	originalCFrame = camera.CFrame
 	originalCameraType = camera.CameraType
 	camera.CameraType = Enum.CameraType.Scriptable
+
+	startCfly()
 
 	actionBtn.Text = "Stop"
 	actionBtn.BackgroundColor3 = Color3.fromHex("#c4302b")
@@ -728,30 +751,19 @@ local function runLoader()
 		local p2Total = 0
 		for _, col in pairs(columns) do p2Total += #col end
 
-		local p3Total = 0
-		local phase3Centers, phase3Columns
-		if not currentStrategy.skipPhase3 then
-			phase3Centers = expandCenters(chunkCenters, PHASE3_SPACE_SCALE)
-			phase3Columns = buildColumns(phase3Centers, currentGameConfig.chunkSize)
-			for _, col in pairs(phase3Columns) do p3Total += #col end
-		end
-
-		totalWorkItems = p1Total + p2Total + p3Total
+		totalWorkItems = p1Total + p2Total
 		globalDone = 0
 		globalStartTime = tick()
 
 		local originalFastWait = currentStrategy.fastWait
-		local originalSkipPhase3 = currentStrategy.skipPhase3
 		local originalSweepTween = currentStrategy.sweepTween
 
 		if currentGameConfig.fastWait then currentStrategy.fastWait = currentGameConfig.fastWait end
-		if currentGameConfig.skipPhase3 ~= nil then currentStrategy.skipPhase3 = currentGameConfig.skipPhase3 end
 		if currentGameConfig.sweepTween then currentStrategy.sweepTween = currentGameConfig.sweepTween end
 
 		local success = executePhase1(chunkCenters)
 		if not success then
 			currentStrategy.fastWait = originalFastWait
-			currentStrategy.skipPhase3 = originalSkipPhase3
 			currentStrategy.sweepTween = originalSweepTween
 			restoreCamera()
 			running = false
@@ -764,7 +776,6 @@ local function runLoader()
 		success = executePhase2(columns)
 		if not success then
 			currentStrategy.fastWait = originalFastWait
-			currentStrategy.skipPhase3 = originalSkipPhase3
 			currentStrategy.sweepTween = originalSweepTween
 			restoreCamera()
 			running = false
@@ -774,23 +785,7 @@ local function runLoader()
 			return
 		end
 
-		if not currentStrategy.skipPhase3 then
-			success = executePhase3(phase3Columns)
-			if not success then
-				currentStrategy.fastWait = originalFastWait
-				currentStrategy.skipPhase3 = originalSkipPhase3
-				currentStrategy.sweepTween = originalSweepTween
-				restoreCamera()
-				running = false
-				StateMachine:transition(States.IDLE)
-				actionBtn.Text = "Start"
-				setProgress(0, "Stopped")
-				return
-			end
-		end
-
 		currentStrategy.fastWait = originalFastWait
-		currentStrategy.skipPhase3 = originalSkipPhase3
 		currentStrategy.sweepTween = originalSweepTween
 
 		local phaseElapsed = tick() - globalStartTime
@@ -844,15 +839,7 @@ local function runLoader()
 	local p2Total = 0
 	for _, col in pairs(columns) do p2Total += #col end
 
-	local p3Total = 0
-	local phase3Centers, phase3Columns
-	if not currentStrategy.skipPhase3 then
-		phase3Centers = expandCenters(chunkCenters, PHASE3_SPACE_SCALE)
-		phase3Columns = buildColumns(phase3Centers, chunkSize)
-		for _, col in pairs(phase3Columns) do p3Total += #col end
-	end
-
-	totalWorkItems = p1Total + p2Total + p3Total
+	totalWorkItems = p1Total + p2Total
 	globalDone = 0
 	globalStartTime = tick()
 
@@ -874,18 +861,6 @@ local function runLoader()
 		actionBtn.Text = "Start"
 		setProgress(0, "Stopped")
 		return
-	end
-
-	if not currentStrategy.skipPhase3 then
-		success = executePhase3(phase3Columns)
-		if not success then
-			restoreCamera()
-			running = false
-			StateMachine:transition(States.IDLE)
-			actionBtn.Text = "Start"
-			setProgress(0, "Stopped")
-			return
-		end
 	end
 
 	executeRoaming(chunkCenters)
@@ -999,36 +974,28 @@ local actionCorner = Instance.new("UICorner", actionBtn)
 actionCorner.CornerRadius = UDim.new(0, 0)
 
 local BTN_ACTION_DEFAULT = Color3.fromHex("#57993d")
-local BTN_ACTION_HOVER = Color3.fromHex("#5cb337")
-local BTN_ACTION_DOWN = Color3.fromHex("#6bcd2b")
+local BTN_ACTION_HOVER   = Color3.fromHex("#5cb337")
+local BTN_ACTION_DOWN    = Color3.fromHex("#6bcd2b")
 
 local BTN_STOP_DEFAULT = Color3.fromHex("#993d3d")
-local BTN_STOP_HOVER = Color3.fromHex("#b33636")
-local BTN_STOP_DOWN = Color3.fromHex("#cd362c")
+local BTN_STOP_HOVER   = Color3.fromHex("#b33636")
+local BTN_STOP_DOWN    = Color3.fromHex("#cd362c")
 
 local BTN_STRATEGY_DEFAULT = Color3.fromHex("#23456d")
-local BTN_STRATEGY_HOVER = Color3.fromHex("#4296fa")
-local BTN_STRATEGY_DOWN = Color3.fromHex("#1b87fa")
+local BTN_STRATEGY_HOVER   = Color3.fromHex("#4296fa")
+local BTN_STRATEGY_DOWN    = Color3.fromHex("#1b87fa")
 
 local actionHovering = false
 local strategyHovering = false
 
 actionBtn.MouseEnter:Connect(function()
 	actionHovering = true
-	if running then
-		actionBtn.BackgroundColor3 = BTN_STOP_HOVER
-	else
-		actionBtn.BackgroundColor3 = BTN_ACTION_HOVER
-	end
+	actionBtn.BackgroundColor3 = running and BTN_STOP_HOVER or BTN_ACTION_HOVER
 end)
 
 actionBtn.MouseLeave:Connect(function()
 	actionHovering = false
-	if running then
-		actionBtn.BackgroundColor3 = BTN_STOP_DEFAULT
-	else
-		actionBtn.BackgroundColor3 = BTN_ACTION_DEFAULT
-	end
+	actionBtn.BackgroundColor3 = running and BTN_STOP_DEFAULT or BTN_ACTION_DEFAULT
 end)
 
 strategyBtn.MouseEnter:Connect(function()
@@ -1042,11 +1009,7 @@ strategyBtn.MouseLeave:Connect(function()
 end)
 
 actionBtn.MouseButton1Down:Connect(function()
-	if running then
-		actionBtn.BackgroundColor3 = BTN_STOP_DOWN
-	else
-		actionBtn.BackgroundColor3 = BTN_ACTION_DOWN
-	end
+	actionBtn.BackgroundColor3 = running and BTN_STOP_DOWN or BTN_ACTION_DOWN
 end)
 
 actionBtn.MouseButton1Up:Connect(function()
@@ -1082,13 +1045,10 @@ end)
 strategyBtn.MouseButton1Click:Connect(function()
 	if running then return end
 
-	if currentStrategy == LoadStrategies.SPEED then
-		currentStrategy = LoadStrategies.BALANCED
-		actionBtn.BackgroundColor3 = BTN_ACTION_DEFAULT
-	elseif currentStrategy == LoadStrategies.BALANCED then
-		currentStrategy = LoadStrategies.QUALITY
+	if currentStrategy == LoadStrategies.SLOW then
+		currentStrategy = LoadStrategies.FAST
 	else
-		currentStrategy = LoadStrategies.SPEED
+		currentStrategy = LoadStrategies.SLOW
 	end
 
 	strategyBtn.Text = "Strategy: " .. currentStrategy.name
