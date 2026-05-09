@@ -131,3 +131,5 @@ end
 require(ReplicatedStorage.Game.Paraglide).IsFlying = function()
     return tostring(getfenv(2).script) == "Falling"
 end
+
+ReplicatedStorage:SetAttribute("RollingEnabled",true)

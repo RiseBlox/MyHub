@@ -1,4 +1,27 @@
 local function RunChams()
+    local function FullUninject()
+        local RunService = game:GetService("RunService")
+        local Players = game:GetService("Players")
+        local CHAM_TAG = "__ChamSystem"
+
+        local prev = RunService:FindFirstChild(CHAM_TAG)
+        if prev then
+            prev:Fire()
+            prev:Destroy()
+        end
+
+        for _, player in ipairs(Players:GetPlayers()) do
+            if player.Character then
+                local h = player.Character:FindFirstChildOfClass("Highlight")
+                if h then h:Destroy() end
+            end
+        end
+
+        task.wait()
+    end
+
+    FullUninject()
+
     local Players = game:GetService("Players")
     local RunService = game:GetService("RunService")
 
@@ -62,6 +85,21 @@ local function RunChams()
         return DEFAULT_COLORS
     end
 
+    local function getToolCount(player)
+        local count = 0
+        if player.Backpack then
+            for _, obj in ipairs(player.Backpack:GetChildren()) do
+                if obj:IsA("Tool") then count += 1 end
+            end
+        end
+        if player.Character then
+            for _, obj in ipairs(player.Character:GetChildren()) do
+                if obj:IsA("Tool") then count += 1 end
+            end
+        end
+        return count
+    end
+
     local function refreshChams(player)
         local character = player.Character
         if not character or not character:FindFirstChild("HumanoidRootPart") then return end
@@ -70,14 +108,16 @@ local function RunChams()
 
     local playerConnections = {}
     local masterConnections = {}
+    local playerToolCount = {}
 
     local function cleanupPlayer(player)
         if playerConnections[player] then
             for _, c in ipairs(playerConnections[player]) do
-                if c.Connected then c:Disconnect() end
+                if c and c.Connected then c:Disconnect() end
             end
             playerConnections[player] = nil
         end
+        playerToolCount[player] = nil
         if player.Character then
             local h = player.Character:FindFirstChildOfClass("Highlight")
             if h then h:Destroy() end
@@ -89,10 +129,11 @@ local function RunChams()
             cleanupPlayer(player)
         end
         for _, c in ipairs(masterConnections) do
-            if c.Connected then c:Disconnect() end
+            if c and c.Connected then c:Disconnect() end
         end
         masterConnections = {}
         playerConnections = {}
+        playerToolCount = {}
     end
 
     local function waitForCharacterReady(character)
@@ -130,12 +171,14 @@ local function RunChams()
 
         cleanupPlayer(player)
         playerConnections[player] = {}
+        playerToolCount[player] = 0
 
         local function onCharacterAdded(character)
             for _, c in ipairs(playerConnections[player]) do
-                if c.Connected then c:Disconnect() end
+                if c and c.Connected then c:Disconnect() end
             end
             playerConnections[player] = {}
+            playerToolCount[player] = 0
 
             task.spawn(function()
                 local ok = waitForCharacterReady(character)
@@ -143,6 +186,7 @@ local function RunChams()
                 if player.Character ~= character then return end
 
                 refreshChams(player)
+                playerToolCount[player] = getToolCount(player)
 
                 local backpack = player.Backpack
                 local function onChange(child)
@@ -177,28 +221,38 @@ local function RunChams()
     table.insert(masterConnections, Players.PlayerAdded:Connect(setupPlayer))
     table.insert(masterConnections, Players.PlayerRemoving:Connect(cleanupPlayer))
 
-	local HEARTBEAT_INTERVAL = 3
-	local lastCheck = 0
+    local HEARTBEAT_INTERVAL = 1
+    local lastCheck = 0
 
-	table.insert(masterConnections,
-		RunService.Heartbeat:Connect(function()
-			local now = tick()
-			if now - lastCheck < HEARTBEAT_INTERVAL then return end
-			lastCheck = now
+    table.insert(masterConnections,
+        RunService.Heartbeat:Connect(function()
+            local now = tick()
+            if now - lastCheck < HEARTBEAT_INTERVAL then return end
+            lastCheck = now
 
-			for _, player in ipairs(Players:GetPlayers()) do
-				if player == LocalPlayer then continue end
-				local character = player.Character
-				if not character then continue end
-				if not character:FindFirstChild("HumanoidRootPart") then continue end
+            for _, player in ipairs(Players:GetPlayers()) do
+                if player == LocalPlayer then continue end
+                local character = player.Character
+                if not character then continue end
+                if not character:FindFirstChild("HumanoidRootPart") then continue end
 
-				local highlight = character:FindFirstChildOfClass("Highlight")
-				if not highlight or highlight.Adornee ~= character then
-					refreshChams(player)
-				end
-			end
-		end)
-	)
+                local highlight = character:FindFirstChildOfClass("Highlight")
+                if not highlight or highlight.Adornee ~= character then
+                    refreshChams(player)
+                    playerToolCount[player] = getToolCount(player)
+                    continue
+                end
+
+                local currentToolCount = getToolCount(player)
+                local cachedToolCount = playerToolCount[player] or 0
+
+                if currentToolCount ~= cachedToolCount then
+                    refreshChams(player)
+                    playerToolCount[player] = currentToolCount
+                end
+            end
+        end)
+    )
 
     table.insert(masterConnections,
         LocalPlayer.CharacterAdded:Connect(function()
