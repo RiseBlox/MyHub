@@ -8,7 +8,7 @@ local Workspace = game:GetService("Workspace")
 local PhysicsService = game:GetService("PhysicsService")
 
 pcall(function()
-	settings().Rendering.QualityLevel = 3
+	settings().Rendering.QualityLevel = 6
 	settings().Rendering.MeshPartDetailLevel = Enum.MeshPartDetailLevel.Level04
 end)
 
@@ -84,7 +84,9 @@ end)
 
 local function throttleEffect(obj)
 	if obj:IsA("ParticleEmitter") or obj:IsA("Trail") then
-		obj.Lifetime = NumberRange.new(0)
+        pcall(function()
+		    obj.Lifetime = NumberRange.new(0, 0)
+        end)
 	elseif obj:IsA("Beam") then
 		obj.Enabled = false
 	elseif obj:IsA("Fire") or obj:IsA("Smoke") or obj:IsA("Sparkles") then
@@ -110,25 +112,8 @@ local function stripAvatarTextures(char)
 	end)
 end
 
-local function disableDynamicHead(char)
-	local head = char:FindFirstChild("Head")
-	if head then
-		local faceControls = head:FindFirstChildOfClass("FaceControls")
-		if faceControls then
-			faceControls:Destroy()
-		end
-	end
-	
-	char.DescendantAdded:Connect(function(obj)
-		if obj:IsA("FaceControls") then
-			obj:Destroy()
-		end
-	end)
-end
-
 local function hookCharacter(char)
 	stripAvatarTextures(char)
-	disableDynamicHead(char)
 	
 	for _, v in ipairs(char:GetDescendants()) do
 		throttleEffect(v)

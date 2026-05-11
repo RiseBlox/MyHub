@@ -134,40 +134,6 @@ end
 
 local CLIENT_VERSION = tonumber(string.match(FULL_VERSION, "%d+%.(%d+)")) or 9e9
 
-local attr_Type_IDs = {
-	string = 0x02,
-	boolean = 0x03,
-	int32 = 0x04,
-	-- float = 0x05, -- float32
-	number = 0x06, -- float64 (double)
-	-- Array = 0x07,
-	-- Dictionary = 0x08,
-	UDim = 0x09,
-	UDim2 = 0x0A,
-	Ray = 0x0B,
-	Faces = 0x0C,
-	Axes = 0x0D,
-	BrickColor = 0x0E,
-	Color3 = 0x0F,
-	Vector2 = 0x10,
-	Vector3 = 0x11,
-	Vector2int16 = 0x12,
-	Vector3int16 = 0x13,
-	CFrame = 0x14,
-	EnumItem = 0x15,
-	NumberSequence = 0x17,
-	NumberSequenceKeypoint = 0x18,
-	ColorSequence = 0x19,
-	ColorSequenceKeypoint = 0x1A,
-	NumberRange = 0x1B,
-	Rect = 0x1C,
-	PhysicalProperties = 0x1D,
-	Region3 = 0x1F,
-	Region3int16 = 0x20,
-	Font = 0x21,
-	SecurityCapabilities = 0x22,
-	Path2DControlPoint = 0x23,
-}
 local CFrame_Rotation_IDs = {
 	["\0\0\128\63\0\0\0\0\0\0\0\0\0\0\0\0\0\0\128\63\0\0\0\0\0\0\0\0\0\0\0\0\0\0\128\63"] = 0x02,
 	["\0\0\128\63\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\128\191\0\0\0\0\0\0\128\63\0\0\0\0"] = 0x03,
@@ -194,6 +160,46 @@ local CFrame_Rotation_IDs = {
 	["\0\0\0\0\0\0\128\191\0\0\0\0\0\0\0\0\0\0\0\0\0\0\128\63\0\0\128\191\0\0\0\0\0\0\0\0"] = 0x22,
 	["\0\0\0\0\0\0\0\0\0\0\128\191\0\0\0\0\0\0\128\191\0\0\0\128\0\0\128\191\0\0\0\0\0\0\0\128"] = 0x23,
 }
+local rotationBuffer = buffer.create(36)
+
+local attr_Type_IDs = {
+	string = 0x02,
+	boolean = 0x03,
+	int32 = 0x04,
+	-- float = 0x05, -- float32
+	number = 0x06, -- float64 (double)
+	-- Array = 0x07,
+	-- Dictionary = 0x08,
+	UDim = 0x09,
+	UDim2 = 0x0A,
+	Ray = 0x0B,
+	Faces = 0x0C,
+	Axes = 0x0D,
+	BrickColor = 0x0E,
+	Color3 = 0x0F,
+	Vector2 = 0x10,
+	Vector3 = 0x11,
+	Vector2int16 = 0x12,
+	Vector3int16 = 0x13,
+	CFrame = 0x14,
+	EnumItem = 0x15,
+	-- 0x16
+	NumberSequence = 0x17,
+	NumberSequenceKeypoint = 0x18,
+	ColorSequence = 0x19,
+	ColorSequenceKeypoint = 0x1A,
+	NumberRange = 0x1B,
+	Rect = 0x1C,
+	PhysicalProperties = 0x1D,
+	-- 0x1E
+	Region3 = 0x1F,
+	Region3int16 = 0x20,
+	Font = 0x21,
+	SecurityCapabilities = 0x22,
+	Path2DControlPoint = 0x23,
+	TweenInfo = 0x24,
+}
+
 local BASE_CAPABILITIES
 pcall(function()
 	BASE_CAPABILITIES = SecurityCapabilities.new()
@@ -335,7 +341,7 @@ Binary_Descriptors = {
 			return b, len
 		end
 	end,
-	__writei64 = function(b, offset, raw)
+	__writei64_le = function(b, offset, raw)
 		local low = bit32.band(raw, 0xFFFFFFFF)
 		local high = (raw - low) / 0x100000000
 
@@ -443,22 +449,18 @@ Binary_Descriptors = {
 	end,
 	["CFrame"] = function(raw)
 		local X, Y, Z, R00, R01, R02, R10, R11, R12, R20, R21, R22 = raw:GetComponents()
-		local rotation_ID
-		do
-			local b = buffer.create(36)
 
-			buffer.writef32(b, 0, R00)
-			buffer.writef32(b, 4, R01)
-			buffer.writef32(b, 8, R02)
-			buffer.writef32(b, 12, R10)
-			buffer.writef32(b, 16, R11)
-			buffer.writef32(b, 20, R12)
-			buffer.writef32(b, 24, R20)
-			buffer.writef32(b, 28, R21)
-			buffer.writef32(b, 32, R22)
+		buffer.writef32(rotationBuffer, 0, R00)
+		buffer.writef32(rotationBuffer, 4, R01)
+		buffer.writef32(rotationBuffer, 8, R02)
+		buffer.writef32(rotationBuffer, 12, R10)
+		buffer.writef32(rotationBuffer, 16, R11)
+		buffer.writef32(rotationBuffer, 20, R12)
+		buffer.writef32(rotationBuffer, 24, R20)
+		buffer.writef32(rotationBuffer, 28, R21)
+		buffer.writef32(rotationBuffer, 32, R22)
 
-			rotation_ID = CFrame_Rotation_IDs[buffer.tostring(b)]
-		end
+		local rotation_ID = CFrame_Rotation_IDs[buffer.tostring(rotationBuffer)]
 
 		local len = rotation_ID and 13 or 49
 		local b = buffer.create(len)
@@ -603,7 +605,7 @@ Binary_Descriptors = {
 			return b, 8
 		end
 
-		Binary_Descriptors.__writei64(b, 0, __COUNT_CAPABILITY_BITS(raw))
+		Binary_Descriptors.__writei64_le(b, 0, __COUNT_CAPABILITY_BITS(raw))
 
 		return b, 8
 	end,
@@ -614,6 +616,18 @@ Binary_Descriptors = {
 			raw.LeftTangent,
 			raw.RightTangent
 		)
+	end,
+	["TweenInfo"] = function(raw)
+		local b = buffer.create(21)
+
+		buffer.writef32(b, 0, raw.Time)
+		buffer.writef32(b, 4, raw.DelayTime)
+		buffer.writei32(b, 8, raw.RepeatCount)
+		buffer.writeu32(b, 12, raw.EasingStyle.Value)
+		buffer.writeu32(b, 16, raw.EasingDirection.Value)
+		buffer.writeu8(b, 20, raw.Reverses and 1 or 0)
+
+		return b, 21
 	end,
 }
 
@@ -703,7 +717,7 @@ XML_Descriptors = {
 	--------------------------------------------------------------
 	--------------------------------------------------------------
 	--------------------------------------------------------------
-	-- AssetContentMap = function(raw) return "[]" end, AssetContentMapSerializationEnabled	& VoxelGridNew5_PlaceFilter	FFlags
+	-- AssetContentMap = function(raw) return "[]" end,  AssetContentMapSerializationEnabled	& VoxelGridNew5_PlaceFilter	FFlags; https://github.com/MarioMaster9/rbxl/blob/master/util/BinaryChunk.py#L298
 	Axes = function(raw)
 		-- The text of this element is formatted as an integer between 0 and 7
 
@@ -1092,7 +1106,7 @@ do
 		},
 	}, true)
 
-	local function AttributesSerialize(attrs)
+	local function AttributesSerialize(attrs, header_bytes)
 		-- * There are certain restrictions for names of attributes
 		-- https://create.roblox.com/docs/reference/engine/classes/Instance#SetAttribute
 		-- But it seems like even if those are present, Studio still opens the file just fine
@@ -1104,6 +1118,11 @@ do
 		local buffer_size = 4
 		local attrs_sorted = {}
 		local attrs_formatted = table.clone(attrs)
+
+		if header_bytes then
+			buffer_size += #header_bytes
+		end
+
 		for attr, val in attrs do
 			attrs_n += 1
 			attrs_sorted[attrs_n] = attr
@@ -1122,10 +1141,19 @@ do
 
 		local b = buffer.create(buffer_size)
 
-		buffer.writeu32(b, 0, attrs_n)
+		local offset = 0
+
+		if header_bytes then
+			for _, header_byte in header_bytes do
+				buffer.writeu8(b, offset, header_byte)
+				offset += 1
+			end
+		end
+
+		buffer.writeu32(b, offset, attrs_n)
+		offset += 4
 
 		local string__descriptor = Binary_Descriptors["string"]
-		local offset = 4
 		for _, attr in attrs_sorted do
 			local b_Name, Name_size = string__descriptor(attr)
 
@@ -1284,10 +1312,19 @@ do
 				local props = instance:GetProperties()
 
 				if not next(props) then
-					return "\0\0\0\0" -- ! Essential
+					return "\0\0\0\0"
 				end
 
 				return AttributesSerialize(props)
+			end,
+			PropertyTransitionsSerialize = function(instance)
+				local transitions = instance:GetPropertyTransitions()
+
+				if not next(transitions) then
+					return "\2\0\0\0\0\0"
+				end
+
+				return AttributesSerialize(transitions, { 0x02, 0x00 })
 			end,
 		},
 		StyleQuery = {
@@ -1492,11 +1529,11 @@ do
 
 				local b = buffer.create(uid_n * 8)
 
-				local __writei64 = Binary_Descriptors.__writei64
+				local __writei64_le = Binary_Descriptors.__writei64_le
 
 				local offset = 0
 				for _, user_id in userid_accesslist do
-					__writei64(b, offset, user_id)
+					__writei64_le(b, offset, user_id)
 					offset += 8
 				end
 
@@ -1559,7 +1596,95 @@ do
 
 		Terrain = {
 			AcquisitionMethod = "LastUsedModificationMethod", -- ? Not sure, RobloxScriptSecurity
+			-- Material = function(instance) -- EnableMaterialSlotTable FFlag, uncomment once GetMaterialSlot is enabled
+			-- 	local slots = {}
+			-- 	for slotIndex = 0, 1e9 do
+			-- 		local ok, baseMaterial, materialVariant, color =
+			-- 			pcall(instance.GetMaterialSlot, instance, slotIndex)
+
+			-- 		if ok then
+			-- 			if baseMaterial then
+			-- 				table.insert(
+			-- 					slots,
+			-- 					{
+			-- 						slotIndex = slotIndex,
+			-- 						baseMaterial = baseMaterial,
+			-- 						materialVariant = materialVariant,
+			-- 						color = color,
+			-- 					}
+			-- 				)
+			-- 			end
+			-- 		else
+			-- 			break
+			-- 		end
+			-- 	end
+
+			-- 	local size = 8 -- header
+
+			-- 	for _, slot in slots do
+			-- 		size += 15 + #slot.materialVariant
+			-- 	end
+
+			-- 	local b = buffer.create(size)
+			-- 	local offset = 0
+
+			-- 	-- header
+			-- 	buffer.writeu32(b, offset, 1) -- version
+			-- 	offset += 4
+
+			-- 	buffer.writeu32(b, offset, #slots)
+			-- 	offset += 4
+
+			-- 	for _, slot in slots do
+			-- 		buffer.writeu32(b, offset, slot.slotIndex)
+			-- 		offset += 4
+
+			-- 		buffer.writeu8(b, offset, (slot.color.R * 255))
+			-- 		offset += 1
+			-- 		buffer.writeu8(b, offset, (slot.color.G * 255))
+			-- 		offset += 1
+			-- 		buffer.writeu8(b, offset, (slot.color.B * 255))
+			-- 		offset += 1
+
+			-- 		buffer.writeu32(b, offset, slot.baseMaterial.Value)
+			-- 		offset += 4
+
+			-- 		buffer.writeu32(b, offset, #slot.materialVariant)
+			-- 		offset += 4
+
+			-- 		buffer.writestring(b, offset, slot.materialVariant)
+			-- 		offset += #slot.materialVariant
+			-- 	end
+
+			-- 	return buffer.tostring(b)
+			-- end,
 			MaterialColors = function(instance) -- https://github.com/RobloxAPI/spec/blob/master/properties/MaterialColors.md
+				-- TODO Use code below once GetFirstCustomMaterialSlotIndex & GetMaterialSlot are enabled
+				--[[
+				local colors = {}
+				for slotIndex = 0, instance:GetFirstCustomMaterialSlotIndex() - 1 do
+					local o, baseMaterial, materialVariant, color = pcall(instance.GetMaterialSlot, instance, slotIndex)
+
+					if o then
+						if color then
+							table.insert(colors, color)
+						end
+					else
+						break
+					end
+				end
+				local b = buffer.create(#colors * 3)
+				local offset = 0
+				for _, color in colors do
+					buffer.writeu8(b, offset, (color.R * 255))
+					offset += 1
+					buffer.writeu8(b, offset, (color.G * 255))
+					offset += 1
+					buffer.writeu8(b, offset, (color.B * 255))
+					offset += 1
+				end
+				]]
+
 				local TERRAIN_MATERIAL_COLORS =
 					{ --https://github.com/rojo-rbx/rbx-dom/blob/master/rbx_dom_lua/src/customProperties.lua#L5
 						Enum.Material.Grass,
@@ -1588,14 +1713,14 @@ do
 				local b = buffer.create(69) -- 69 bytes: 6 reserved + 63 for colors (21 materials * 3 components)
 				local offset = 6 -- 6 reserved bytes
 
-				local RGB_components = { "R", "G", "B" }
-
 				for _, material in TERRAIN_MATERIAL_COLORS do
 					local color = instance:GetMaterialColor(material)
-					for _, component in RGB_components do
-						buffer.writeu8(b, offset, math.floor(color[component] * 255)) -- ? math.floor seems unneeded but it makes it faster
+					buffer.writeu8(b, offset, (color.R * 255))
+					offset += 1
+					buffer.writeu8(b, offset, (color.G * 255))
+					offset += 1
+					buffer.writeu8(b, offset, (color.B * 255))
 						offset += 1
-					end
 				end
 
 				return buffer.tostring(b)
@@ -1665,7 +1790,7 @@ do
 		PackageLink = { PackageIdSerialize = "PackageId", VersionIdSerialize = "VersionNumber" },
 		Players = { MaxPlayersInternal = "MaxPlayers", PreferredPlayersInternal = "PreferredPlayers" }, -- ? Only needed for execs that lack LocalUserSecurity (Level 2, 5, 9), even so, it's a pretty useless information as it can be viewed elsewhere
 
-		StarterPlayer = { AvatarJointUpgrade_Serialized = "AvatarJointUpgrade" }, -- RobloxScriptSecurity
+		StarterPlayer = { AvatarJointUpgrade_SerializedRollout = "AvatarJointUpgrade" }, -- RobloxScriptSecurity
 		Smoke = { size_xml = "Size", opacity_xml = "Opacity", riseVelocity_xml = "RiseVelocity" },
 		Sound = {
 			xmlRead_MinDistance_3 = "RollOffMinDistance", -- * Also MinDistance
@@ -2181,8 +2306,9 @@ local GLOBAL_ENV = getgenv and getgenv() or _G or shared
 --- @within SynSaveInstance
 --- @field __DEBUG_MODE boolean -- This will print debug logs to console about unusual scenarios. Recommended to enable if you wish to help us improve our products and find bugs / issues with it! ___Default:___ false
 --- @field ReadMe boolean --___Default:___ true
---- @field SafeMode boolean -- Kicks you before Saving, which prevents you from being detected in any game. **HIGHLY RECOMMENDED TO KEEP ENABLED**. ___Default:___ true
---- @field KillAllScripts boolean -- Kills all scripts to further protect you from detections. SafeMode also enables this by default. **HIGHLY RECOMMENDED TO KEEP ENABLED**. ___Default:___ true
+--- @field SafeMode boolean -- Kicks you before Saving, which keeps you safe. **HIGHLY RECOMMENDED TO KEEP ENABLED**. ___Default:___ true
+--- @field KillAllScripts boolean -- Kills all scripts to further protect you. SafeMode also enables this by default. **HIGHLY RECOMMENDED TO KEEP ENABLED**. ___Default:___ true
+--- @field BoostFPS boolean -- Massively boosts FPS by disabling 3D rendering. Other options also enable it, like: SafeMode. ___Default:___ false
 --- @field ShutdownWhenDone boolean -- Shuts the game down after saveinstance is finished. ___Default:___ false
 --- @field AntiIdle boolean -- Prevents the 20-minute-Idle Kick. ___Default:___ true
 --- .Anonymous {boolean|table{UserId = string, Name = string}} -- * **RISKY:** Cleans the file of any info related to your account like: Name, UserId. This is useful for some games that might store that info in GUIs or other Instances. Might potentially mess up parts of strings that contain characters that match your Name or parts of numbers that match your UserId. Can also be a table with UserId & Name keys. ___Default:___ false
@@ -2209,13 +2335,13 @@ local GLOBAL_ENV = getgenv and getgenv() or _G or shared
 --- @field IgnoreNotArchivable boolean -- Ignores the Archivable property and saves Non-Archivable instances. ___Default:___ true
 --- @field IgnorePropertiesOfNotScriptsOnScriptsMode boolean -- Ignores property of every instance that is not a script in "scripts" mode. ___Default:___ false
 --- @field IgnoreSpecialProperties boolean -- Prevents calls to `gethiddenproperty` and uses fallback methods instead. This also helps with crashes. If your file is corrupted after saving, you can try turning this on. ___Default:___ false
---- @field IsolateLocalPlayer boolean -- Saves Children of LocalPlayer as separate folder and prevents any instance of ClassName Player with .Name identical to LocalPlayer.Name from saving. ___Default:___ false
---- @field IsolateStarterPlayer boolean -- If enabled, StarterPlayer will be cleared and the saved starter player will be placed into folders. ___Default:___ false
---- @field IsolateLocalPlayerCharacter boolean -- Saves Children of LocalPlayer.Character as separate folder and prevents any instance of ClassName Player with .Name identical to LocalPlayer.Name from saving. ___Default:___ false
+--- @field IsolateStarterPlayer boolean -- Saves StarterPlayer as separate folder, children of the original instance will be ignored. ___Default:___ false
+--- @field IsolatePlayers boolean -- Saves All Players as separate folder, children of the original instance will be ignored. ___Default:___ false
+--- @field IsolateLocalPlayer boolean -- Saves LocalPlayer as separate folder, original instance will be ignored. ___Default:___ false
+--- @field IsolateLocalPlayerCharacter boolean -- Saves LocalPlayer.Character as separate folder, original instance will be ignored. ___Default:___ false
 --- @field SavePlayerCharacters boolean -- Ignore player characters while saving. ___Default:___ false
---- @field SaveNotCreatable boolean -- * Includes non-serializable instances as Folder objects (Name is misleading as this is mostly a fix for certain NilInstances and isn't always related to NotCreatable). This option is automatically enabled by options like: IsolatePlayers, IsolateLocalPlayer, etc. ___Default:___ false
+--- @field SaveNotCreatable boolean -- * Includes non-serializable instances as Folder objects (Name is misleading as this is mostly a fix for certain NilInstances and isn't always related to NotCreatable). Other options also enable it, like: IsolatePlayers, IsolateLocalPlayer, etc. ___Default:___ false
 --- .NotCreatableFixes table<Instance.ClassName> -- * {"Player"} is the same as {Player = "Folder"}; Format like {SpawnLocation = "Part"} is only to be used when SpawnLocation inherits from "Part" AND "Part" is Creatable. ___Default:___ { "", "Player", "PlayerScripts", "PlayerGui", "TouchTransmitter" }
---- @field IsolatePlayers boolean -- * This option does save players, it's just they won't show up in Studio and can only be viewed through the place file code (in text editor). More info at https://github.com/luau/UniversalSynSaveInstance/issues/2. ___Default:___ false
 --- @field AlternativeWritefile boolean -- * Splits file content string into segments and writes them using appendfile. This might help with crashes when it starts writing to file. Though there is a risk of appendfile working incorrectly on some executors. ___Default:___ true
 --- @field IgnoreDefaultPlayerScripts boolean -- * **RISKY: Ignores Default PlayerScripts like PlayerModule & RbxCharacterSounds. Prevents crashes on certain Executors. ___Default:___ true
 --- @field IgnoreSharedStrings boolean -- * **RISKY: FIXES CRASHES (TEMPORARY, TESTED ON ROEXEC ONLY). FEEL FREE TO DISABLE THIS TO SEE IF IT WORKS FOR YOU**. ___Default:___ true
@@ -2291,7 +2417,7 @@ local function synsaveinstance(CustomOptions, CustomOptions2)
 
 	local OPTIONS = {
 		mode = "optimized",
-		Decompile = true,
+		Decompile = EXECUTOR_NAME ~= "Velocity", -- TODO Temp fix for crashes
 		scriptcache = true,
 		-- decomptype = "",
 		DecompileTimeout = 10,
@@ -2325,6 +2451,7 @@ local function synsaveinstance(CustomOptions, CustomOptions2)
 		ShowStatus = true,
 		KillAllScripts = true,
 		SafeMode = true,
+		BoostFPS = false,
 		ShutdownWhenDone = false,
 		AntiIdle = true,
 		Anonymous = false,
@@ -2623,7 +2750,6 @@ local function synsaveinstance(CustomOptions, CustomOptions2)
 		__DEBUG_MODE = warn
 	end
 
-	local SafeMode = OPTIONS.SafeMode
 	local LP_UserId, LP_Name, ANON_UserId, ANON_Name, AnonymizableTypes
 
 	do
@@ -4101,7 +4227,7 @@ local function synsaveinstance(CustomOptions, CustomOptions2)
 	end
 
 	do
-		if SafeMode then
+		if OPTIONS.SafeMode then
 			task.spawn(function()
 				local LocalPlayer = GetLocalPlayer()
 
@@ -4142,6 +4268,12 @@ local function synsaveinstance(CustomOptions, CustomOptions2)
 				-- task.delay(10, service.GuiService.ClearError, service.GuiService)
 			end)
 
+			if CustomOptions_valid["BoostFPS"] == nil then
+				OPTIONS.BoostFPS = true
+			end
+		end
+
+		if OPTIONS.BoostFPS then
 			pcall(function()
 				service.RunService:Set3dRenderingEnabled(false)
 			end)
@@ -4286,7 +4418,7 @@ local function synsaveinstance(CustomOptions, CustomOptions2)
 			return debug.traceback(err)
 		end)
 
-		if SafeMode then
+		if OPTIONS.BoostFPS then
 			pcall(function()
 				local max = 5
 				task.delay(
