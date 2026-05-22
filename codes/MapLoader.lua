@@ -3,12 +3,30 @@ local Workspace = game:GetService("Workspace")
 local TweenService = game:GetService("TweenService")
 local RunService = game:GetService("RunService")
 local ContentProvider = game:GetService("ContentProvider")
+local UserInputService = game:GetService("UserInputService")
 
 local player = Players.LocalPlayer
 local camera = Workspace.CurrentCamera
 
-pcall(function()
+if sethiddenproperty then
 	sethiddenproperty(Workspace, "StreamOutBehavior", Enum.StreamOutBehavior.Default)
+    sethiddenproperty(workspace, "StreamingMinRadius", 5000)
+end
+
+local function applyPersistentStreaming(model)
+	if model:IsA("Model") then
+		pcall(function()
+			model.ModelStreamingMode = Enum.ModelStreamingMode.Persistent
+		end)
+	end
+end
+
+for _, descendant in ipairs(Workspace:GetDescendants()) do
+	applyPersistentStreaming(descendant)
+end
+
+Workspace.DescendantAdded:Connect(function(descendant)
+	applyPersistentStreaming(descendant)
 end)
 
 local States = {
@@ -73,9 +91,22 @@ local LoadStrategies = {
 	}
 }
 
-local currentStrategy = LoadStrategies.SLOW
+local FlyMethods = {
+	CFLY = "cfly",
+	SFLY = "sfly"
+}
 
-local HEIGHT_OFFSET = 175
+local MoveMethods = {
+	TPPOS = "tppos",
+	TWEENTPPOS = "tweentppos"
+}
+
+local currentStrategy = LoadStrategies.SLOW
+local currentFlyMethod = FlyMethods.CFLY
+local currentMoveMethod = MoveMethods.TPPOS
+local tweenSpeedForMovement = 0.5
+
+local HEIGHT_OFFSET = 150
 local SWEEP_WAIT = 0.15
 local ROAM_RADIUS = 80
 local ROAM_BOPS = 4
@@ -113,11 +144,129 @@ local GameConfigs = {
 
 local currentGameConfig = GameConfigs[GAME_ID]
 
--- cfly state
+local FLYING = false
+local flyKeyDown = nil
+local flyKeyUp = nil
+local iyflyspeed = 50
+local vehicleflyspeed = 50
+local QEfly = true
+
 local cflyLoop = nil
 local cflyActive = false
 local cflyPaused = false
 local cflyRespawnConn = nil
+
+local function sFLY(vfly)
+	local char = player.Character or player.CharacterAdded:Wait()
+	local humanoid = char:FindFirstChildOfClass("Humanoid")
+	if not humanoid then
+		repeat task.wait() until char:FindFirstChildOfClass("Humanoid")
+		humanoid = char:FindFirstChildOfClass("Humanoid")
+	end
+
+	if flyKeyDown or flyKeyUp then
+		flyKeyDown:Disconnect()
+		flyKeyUp:Disconnect()
+	end
+
+	local T = char:FindFirstChild("HumanoidRootPart")
+	if not T then return end
+
+	local CONTROL = {F = 0, B = 0, L = 0, R = 0, Q = 0, E = 0}
+	local lCONTROL = {F = 0, B = 0, L = 0, R = 0, Q = 0, E = 0}
+	local SPEED = 0
+
+	local function FLY()
+		FLYING = true
+		local BG = Instance.new('BodyGyro')
+		local BV = Instance.new('BodyVelocity')
+		BG.P = 9e4
+		BG.Parent = T
+		BV.Parent = T
+		BG.MaxTorque = Vector3.new(9e9, 9e9, 9e9)
+		BG.CFrame = T.CFrame
+		BV.Velocity = Vector3.new(0, 0, 0)
+		BV.MaxForce = Vector3.new(9e9, 9e9, 9e9)
+		task.spawn(function()
+			repeat task.wait()
+				local cam = workspace.CurrentCamera
+				if not vfly and humanoid then
+					humanoid.PlatformStand = true
+				end
+
+				if CONTROL.L + CONTROL.R ~= 0 or CONTROL.F + CONTROL.B ~= 0 or CONTROL.Q + CONTROL.E ~= 0 then
+					SPEED = 50
+				elseif not (CONTROL.L + CONTROL.R ~= 0 or CONTROL.F + CONTROL.B ~= 0 or CONTROL.Q + CONTROL.E ~= 0) and SPEED ~= 0 then
+					SPEED = 0
+				end
+				if (CONTROL.L + CONTROL.R) ~= 0 or (CONTROL.F + CONTROL.B) ~= 0 or (CONTROL.Q + CONTROL.E) ~= 0 then
+					BV.Velocity = ((cam.CFrame.LookVector * (CONTROL.F + CONTROL.B)) + ((cam.CFrame * CFrame.new(CONTROL.L + CONTROL.R, (CONTROL.F + CONTROL.B + CONTROL.Q + CONTROL.E) * 0.2, 0).p) - cam.CFrame.p)) * SPEED
+					lCONTROL = {F = CONTROL.F, B = CONTROL.B, L = CONTROL.L, R = CONTROL.R}
+				elseif (CONTROL.L + CONTROL.R) == 0 and (CONTROL.F + CONTROL.B) == 0 and (CONTROL.Q + CONTROL.E) == 0 and SPEED ~= 0 then
+					BV.Velocity = ((cam.CFrame.LookVector * (lCONTROL.F + lCONTROL.B)) + ((cam.CFrame * CFrame.new(lCONTROL.L + lCONTROL.R, (lCONTROL.F + lCONTROL.B + CONTROL.Q + CONTROL.E) * 0.2, 0).p) - cam.CFrame.p)) * SPEED
+				else
+					BV.Velocity = Vector3.new(0, 0, 0)
+				end
+				BG.CFrame = cam.CFrame
+			until not FLYING
+			CONTROL = {F = 0, B = 0, L = 0, R = 0, Q = 0, E = 0}
+			lCONTROL = {F = 0, B = 0, L = 0, R = 0, Q = 0, E = 0}
+			SPEED = 0
+			BG:Destroy()
+			BV:Destroy()
+
+			if humanoid then humanoid.PlatformStand = false end
+		end)
+	end
+
+	flyKeyDown = UserInputService.InputBegan:Connect(function(input, processed)
+		if processed then return end
+		if input.KeyCode == Enum.KeyCode.W then
+			CONTROL.F = (vfly and vehicleflyspeed or iyflyspeed)
+		elseif input.KeyCode == Enum.KeyCode.S then
+			CONTROL.B = - (vfly and vehicleflyspeed or iyflyspeed)
+		elseif input.KeyCode == Enum.KeyCode.A then
+			CONTROL.L = - (vfly and vehicleflyspeed or iyflyspeed)
+		elseif input.KeyCode == Enum.KeyCode.D then
+			CONTROL.R = (vfly and vehicleflyspeed or iyflyspeed)
+		elseif input.KeyCode == Enum.KeyCode.E and QEfly then
+			CONTROL.Q = (vfly and vehicleflyspeed or iyflyspeed)*2
+		elseif input.KeyCode == Enum.KeyCode.Q and QEfly then
+			CONTROL.E = -(vfly and vehicleflyspeed or iyflyspeed)*2
+		end
+		pcall(function() camera.CameraType = Enum.CameraType.Track end)
+	end)
+
+	flyKeyUp = UserInputService.InputEnded:Connect(function(input, processed)
+		if processed then return end
+		if input.KeyCode == Enum.KeyCode.W then
+			CONTROL.F = 0
+		elseif input.KeyCode == Enum.KeyCode.S then
+			CONTROL.B = 0
+		elseif input.KeyCode == Enum.KeyCode.A then
+			CONTROL.L = 0
+		elseif input.KeyCode == Enum.KeyCode.D then
+			CONTROL.R = 0
+		elseif input.KeyCode == Enum.KeyCode.E then
+			CONTROL.Q = 0
+		elseif input.KeyCode == Enum.KeyCode.Q then
+			CONTROL.E = 0
+		end
+	end)
+	FLY()
+end
+
+local function sNOFLY()
+	FLYING = false
+	if flyKeyDown or flyKeyUp then 
+		flyKeyDown:Disconnect() 
+		flyKeyUp:Disconnect() 
+	end
+	if player.Character:FindFirstChildOfClass('Humanoid') then
+		player.Character:FindFirstChildOfClass('Humanoid').PlatformStand = false
+	end
+	pcall(function() workspace.CurrentCamera.CameraType = Enum.CameraType.Custom end)
+end
 
 local function applyCflyToCharacter(character)
 	if not character then return end
@@ -136,7 +285,6 @@ local function startCfly()
 
 	applyCflyToCharacter(player.Character)
 
-	-- reapply on every respawn while cfly is active
 	if cflyRespawnConn then cflyRespawnConn:Disconnect() end
 	cflyRespawnConn = player.CharacterAdded:Connect(function(newChar)
 		if not cflyActive then return end
@@ -150,7 +298,6 @@ local function startCfly()
 	if cflyLoop then cflyLoop:Disconnect() end
 
 	cflyLoop = RunService.Heartbeat:Connect(function(dt)
-		-- skip tick if paused for a tppos
 		if cflyPaused then return end
 
 		local char = player.Character
@@ -197,7 +344,6 @@ local function stopCfly()
 	if head then head.Anchored = false end
 end
 
--- tppos: pause cfly heartbeat, move both HRP and Head, then resume
 local function tpCharTo(pos)
 	local character = player.Character
 	if not character then return end
@@ -210,20 +356,65 @@ local function tpCharTo(pos)
 	if head then
 		head.CFrame = CFrame.new(pos + Vector3.new(0, 1.5, 0))
 	end
-	-- give the engine one frame to settle the new position before
-	-- the cfly heartbeat loop can overwrite it again
 	RunService.Heartbeat:Wait()
 	cflyPaused = false
 end
 
--- hop the character randomly around a chunk center for the dwell duration
+local function tweenTpPos(pos)
+	local character = player.Character
+	if not character then return end
+	local hrp = character:FindFirstChild("HumanoidRootPart")
+	if not hrp then return end
+
+	if currentFlyMethod == FlyMethods.SFLY then
+		if flyKeyDown then flyKeyDown:Disconnect() end
+		if flyKeyUp then flyKeyUp:Disconnect() end
+	end
+
+	local tween = TweenService:Create(
+		hrp,
+		TweenInfo.new(tweenSpeedForMovement, Enum.EasingStyle.Linear),
+		{CFrame = CFrame.new(pos)}
+	)
+	tween:Play()
+	tween.Completed:Wait()
+
+	if currentFlyMethod == FlyMethods.SFLY and FLYING then
+		sFLY(false)
+	end
+end
+
+local function moveCharacter(pos)
+	if currentMoveMethod == MoveMethods.TWEENTPPOS then
+		tweenTpPos(pos)
+	else
+		tpCharTo(pos)
+	end
+end
+
+local function startFly()
+	if currentFlyMethod == FlyMethods.SFLY then
+		sFLY(false)
+	else
+		startCfly()
+	end
+end
+
+local function stopFly()
+	if currentFlyMethod == FlyMethods.SFLY then
+		sNOFLY()
+	else
+		stopCfly()
+	end
+end
+
 local function hopAroundChunk(chunkPos, duration)
 	local elapsed = 0
 	local hopInterval = currentStrategy.hopInterval
 	local hopRadius = currentStrategy.hopRadius
 	local hopYRange = currentStrategy.hopYRange
 
-	tpCharTo(chunkPos)
+	moveCharacter(chunkPos)
 
 	while elapsed < duration do
 		if stopRequested then return end
@@ -232,7 +423,7 @@ local function hopAroundChunk(chunkPos, duration)
 		local offsetY = math.random(-hopYRange * 10, hopYRange * 10) / 10
 		local offsetZ = math.random(-hopRadius * 10, hopRadius * 10) / 10
 
-		tpCharTo(Vector3.new(
+		moveCharacter(Vector3.new(
 			chunkPos.X + offsetX,
 			chunkPos.Y + offsetY,
 			chunkPos.Z + offsetZ
@@ -337,7 +528,7 @@ local savedFramePos
 
 local gui, frame, content
 local barBg, progressFill, progressText
-local actionBtn, strategyBtn
+local actionBtn, strategyBtn, flyMethodBtn, moveMethodBtn
 
 local globalStartTime
 local totalWorkItems
@@ -353,7 +544,7 @@ end
 
 local function restoreCamera()
 	setRendering(true)
-	stopCfly()
+	stopFly()
 	if originalCameraType then camera.CameraType = originalCameraType end
 	if originalCFrame then camera.CFrame = originalCFrame end
 end
@@ -682,7 +873,7 @@ local function executeRoaming(centers)
 	while not stopRequested do
 		local center = centers[math.random(1, #centers)]
 		tweenTo(center.position)
-		tpCharTo(center.position)
+		moveCharacter(center.position)
 
 		for i = 1, ROAM_BOPS do
 			if stopRequested then return false end
@@ -702,7 +893,7 @@ local function runLoader()
 	originalCameraType = camera.CameraType
 	camera.CameraType = Enum.CameraType.Scriptable
 
-	startCfly()
+	startFly()
 
 	actionBtn.Text = "Stop"
 	actionBtn.BackgroundColor3 = Color3.fromHex("#c4302b")
@@ -872,16 +1063,14 @@ local function runLoader()
 	setProgress(0, "Complete")
 end
 
--- UI
-
 gui = Instance.new("ScreenGui", player.PlayerGui)
-gui.Name = "MapLoaderPro"
+gui.Name = "MapLoader"
 gui.ResetOnSpawn = false
 gui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
 
 frame = Instance.new("Frame", gui)
-frame.Size = UDim2.new(0, 340, 0, 165)
-frame.Position = UDim2.new(0.5, -170, 0.5, -70)
+frame.Size = UDim2.new(0, 369, 0, 188)
+frame.Position = UDim2.new(0.5, -170, 0.5, -118)
 frame.BackgroundColor3 = Color3.fromHex("#151618")
 frame.BorderSizePixel = 0
 frame.Active = true
@@ -889,6 +1078,11 @@ frame.Draggable = true
 
 local uiCorner = Instance.new("UICorner", frame)
 uiCorner.CornerRadius = UDim.new(0, 0)
+
+local stroke = Instance.new("UIStroke", frame)
+stroke.Thickness = 1
+stroke.Color = Color3.new(32, 32, 32)
+stroke.Transparency = 0.75
 
 local title = Instance.new("TextLabel", frame)
 title.Size = UDim2.new(1, 0, 0, 36)
@@ -920,8 +1114,8 @@ content.BackgroundTransparency = 1
 content.BorderSizePixel = 0
 
 barBg = Instance.new("Frame", content)
-barBg.Size = UDim2.new(0.9, 0, 0, 20)
-barBg.Position = UDim2.new(0.05, 0, 0, 14)
+barBg.Size = UDim2.new(0.94, 0, 0, 20)
+barBg.Position = UDim2.new(0.03, 0, 0, 14)
 barBg.BackgroundColor3 = Color3.fromHex("#1d2f49")
 barBg.BorderSizePixel = 0
 
@@ -946,11 +1140,11 @@ progressText.TextColor3 = Color3.new(1, 1, 1)
 progressText.BorderSizePixel = 0
 
 strategyBtn = Instance.new("TextButton", content)
-strategyBtn.Size = UDim2.new(0.9, 0, 0, 32)
-strategyBtn.Position = UDim2.new(0.05, 0, 0, 42)
+strategyBtn.Size = UDim2.new(0.94, 0, 0, 28)
+strategyBtn.Position = UDim2.new(0.03, 0, 0, 42)
 strategyBtn.Text = "Strategy: " .. currentStrategy.name
 strategyBtn.Font = Enum.Font.BuilderSansExtraBold
-strategyBtn.TextSize = 13
+strategyBtn.TextSize = 12
 strategyBtn.BackgroundColor3 = Color3.fromHex("#23456d")
 strategyBtn.TextColor3 = Color3.new(1, 1, 1)
 strategyBtn.BorderSizePixel = 0
@@ -959,9 +1153,37 @@ strategyBtn.AutoButtonColor = false
 local stratCorner = Instance.new("UICorner", strategyBtn)
 stratCorner.CornerRadius = UDim.new(0, 0)
 
+flyMethodBtn = Instance.new("TextButton", content)
+flyMethodBtn.Size = UDim2.new(0.4645, 0, 0, 28)
+flyMethodBtn.Position = UDim2.new(0.03, 0, 0, 74)
+flyMethodBtn.Text = "Fly: " .. (currentFlyMethod == FlyMethods.CFLY and "cFLY" or "sFLY")
+flyMethodBtn.Font = Enum.Font.BuilderSansExtraBold
+flyMethodBtn.TextSize = 12
+flyMethodBtn.BackgroundColor3 = Color3.fromHex("#23456d")
+flyMethodBtn.TextColor3 = Color3.new(1, 1, 1)
+flyMethodBtn.BorderSizePixel = 0
+flyMethodBtn.AutoButtonColor = false
+
+local flyCorner = Instance.new("UICorner", flyMethodBtn)
+flyCorner.CornerRadius = UDim.new(0, 0)
+
+moveMethodBtn = Instance.new("TextButton", content)
+moveMethodBtn.Size = UDim2.new(0.4645, 0, 0, 28)
+moveMethodBtn.Position = UDim2.new(0.03, 176, 0, 74)
+moveMethodBtn.Text = "Move: " .. (currentMoveMethod == MoveMethods.TPPOS and "tpPos" or "tweenTpPos")
+moveMethodBtn.Font = Enum.Font.BuilderSansExtraBold
+moveMethodBtn.TextSize = 12
+moveMethodBtn.BackgroundColor3 = Color3.fromHex("#23456d")
+moveMethodBtn.TextColor3 = Color3.new(1, 1, 1)
+moveMethodBtn.BorderSizePixel = 0
+moveMethodBtn.AutoButtonColor = false
+
+local moveCorner = Instance.new("UICorner", moveMethodBtn)
+moveCorner.CornerRadius = UDim.new(0, 0)
+
 actionBtn = Instance.new("TextButton", content)
-actionBtn.Size = UDim2.new(0.9, 0, 0, 32)
-actionBtn.Position = UDim2.new(0.05, 0, 0, 82)
+actionBtn.Size = UDim2.new(0.94, 0, 0, 32)
+actionBtn.Position = UDim2.new(0.03, 0, 0, 106)
 actionBtn.Text = "Start"
 actionBtn.Font = Enum.Font.BuilderSansExtraBold
 actionBtn.TextSize = 15
@@ -981,12 +1203,14 @@ local BTN_STOP_DEFAULT = Color3.fromHex("#993d3d")
 local BTN_STOP_HOVER   = Color3.fromHex("#b33636")
 local BTN_STOP_DOWN    = Color3.fromHex("#cd362c")
 
-local BTN_STRATEGY_DEFAULT = Color3.fromHex("#23456d")
-local BTN_STRATEGY_HOVER   = Color3.fromHex("#4296fa")
-local BTN_STRATEGY_DOWN    = Color3.fromHex("#1b87fa")
+local BTN_OPTION_DEFAULT = Color3.fromHex("#23456d")
+local BTN_OPTION_HOVER   = Color3.fromHex("#4296fa")
+local BTN_OPTION_DOWN    = Color3.fromHex("#1b87fa")
 
 local actionHovering = false
 local strategyHovering = false
+local flyHovering = false
+local moveHovering = false
 
 actionBtn.MouseEnter:Connect(function()
 	actionHovering = true
@@ -1000,12 +1224,32 @@ end)
 
 strategyBtn.MouseEnter:Connect(function()
 	strategyHovering = true
-	strategyBtn.BackgroundColor3 = BTN_STRATEGY_HOVER
+	strategyBtn.BackgroundColor3 = BTN_OPTION_HOVER
 end)
 
 strategyBtn.MouseLeave:Connect(function()
 	strategyHovering = false
-	strategyBtn.BackgroundColor3 = BTN_STRATEGY_DEFAULT
+	strategyBtn.BackgroundColor3 = BTN_OPTION_DEFAULT
+end)
+
+flyMethodBtn.MouseEnter:Connect(function()
+	flyHovering = true
+	flyMethodBtn.BackgroundColor3 = BTN_OPTION_HOVER
+end)
+
+flyMethodBtn.MouseLeave:Connect(function()
+	flyHovering = false
+	flyMethodBtn.BackgroundColor3 = BTN_OPTION_DEFAULT
+end)
+
+moveMethodBtn.MouseEnter:Connect(function()
+	moveHovering = true
+	moveMethodBtn.BackgroundColor3 = BTN_OPTION_HOVER
+end)
+
+moveMethodBtn.MouseLeave:Connect(function()
+	moveHovering = false
+	moveMethodBtn.BackgroundColor3 = BTN_OPTION_DEFAULT
 end)
 
 actionBtn.MouseButton1Down:Connect(function()
@@ -1021,11 +1265,27 @@ actionBtn.MouseButton1Up:Connect(function()
 end)
 
 strategyBtn.MouseButton1Down:Connect(function()
-	strategyBtn.BackgroundColor3 = BTN_STRATEGY_DOWN
+	strategyBtn.BackgroundColor3 = BTN_OPTION_DOWN
 end)
 
 strategyBtn.MouseButton1Up:Connect(function()
-	strategyBtn.BackgroundColor3 = strategyHovering and BTN_STRATEGY_HOVER or BTN_STRATEGY_DEFAULT
+	strategyBtn.BackgroundColor3 = strategyHovering and BTN_OPTION_HOVER or BTN_OPTION_DEFAULT
+end)
+
+flyMethodBtn.MouseButton1Down:Connect(function()
+	flyMethodBtn.BackgroundColor3 = BTN_OPTION_DOWN
+end)
+
+flyMethodBtn.MouseButton1Up:Connect(function()
+	flyMethodBtn.BackgroundColor3 = flyHovering and BTN_OPTION_HOVER or BTN_OPTION_DEFAULT
+end)
+
+moveMethodBtn.MouseButton1Down:Connect(function()
+	moveMethodBtn.BackgroundColor3 = BTN_OPTION_DOWN
+end)
+
+moveMethodBtn.MouseButton1Up:Connect(function()
+	moveMethodBtn.BackgroundColor3 = moveHovering and BTN_OPTION_HOVER or BTN_OPTION_DEFAULT
 end)
 
 actionBtn.MouseButton1Click:Connect(function()
@@ -1054,6 +1314,30 @@ strategyBtn.MouseButton1Click:Connect(function()
 	strategyBtn.Text = "Strategy: " .. currentStrategy.name
 end)
 
+flyMethodBtn.MouseButton1Click:Connect(function()
+	if running then return end
+
+	if currentFlyMethod == FlyMethods.CFLY then
+		currentFlyMethod = FlyMethods.SFLY
+	else
+		currentFlyMethod = FlyMethods.CFLY
+	end
+
+	flyMethodBtn.Text = "Fly: " .. (currentFlyMethod == FlyMethods.CFLY and "cFLY" or "sFLY")
+end)
+
+moveMethodBtn.MouseButton1Click:Connect(function()
+	if running then return end
+
+	if currentMoveMethod == MoveMethods.TPPOS then
+		currentMoveMethod = MoveMethods.TWEENTPPOS
+	else
+		currentMoveMethod = MoveMethods.TPPOS
+	end
+
+	moveMethodBtn.Text = "Move: " .. (currentMoveMethod == MoveMethods.TPPOS and "tpPos" or "tweenTpPos")
+end)
+
 minimize.MouseButton1Click:Connect(function()
 	minimized = not minimized
 	if minimized then
@@ -1063,9 +1347,10 @@ minimize.MouseButton1Click:Connect(function()
 		frame.Position = UDim2.new(0, 10, 1, -46)
 	else
 		content.Visible = true
-		frame.Size = UDim2.new(0, 340, 0, 165)
+		frame.Size = UDim2.new(0, 369, 0, 220)
 		frame.Position = savedFramePos or frame.Position
 	end
 end)
 
 print("[MapLoader] Initialized | State:", StateMachine.current)
+print("[MapLoader] Fly Method:", currentFlyMethod, "| Move Method:", currentMoveMethod)
