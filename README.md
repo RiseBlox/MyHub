@@ -6,9 +6,9 @@
   </picture>
 </p>
 
-<h6 align="center">
---- Free. Powerful. Lightweight. ---
-</h6>
+<h4 align="center">
+「 Free. Powerful. Lightweight. 」
+</h4>
 
 ```lua
 loadstring(game:HttpGet("https://raw.githubusercontent.com/RiseBlox/MyHub/main/MyHub.lua", true))()

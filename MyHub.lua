@@ -4,8 +4,10 @@
   /\/\  _   _  /\  /\_   _| |__
  /    \| | | |/ /_/ / | | | '_ \
 / /\/\ \ |_| / __  /| |_| | |_) |
-\/    \/\__, \/ /_/  \__,_|_.__/  REMASTERED
+\/    \/\__, \/ /_/  \__,_|_.__/
         |___/
+
+「 Free. Powerful. Lightweight. 」
 
 ]]
 
@@ -16,9 +18,9 @@ if game.PlaceId == 606849621 then
 	})
 else
 	game:GetService("StarterGui"):SetCore("SendNotification", {
-		Title = "MyHub [REMASTERED]",
+		Title = "MyHub",
 		Text = "Successfully loaded!"
 	})
 end
 
-loadstring(game:HttpGet("https://raw.githubusercontent.com/MyOrganizationStudio/MyHub/main/MyHub.luau", true))()
+loadstring(game:HttpGet("https://raw.githubusercontent.com/RiseBlox/MyHub/main/MyHub.luau", true))()
