@@ -18,6 +18,7 @@ local SECOND_HEIGHT = 2
 ]]
 
 local Mode = 1
+local Enabled = true
 
 local Character
 local Head
@@ -78,6 +79,10 @@ UIS.InputBegan:Connect(function(input, gp)
         end
     end
 
+    if input.KeyCode == Enum.KeyCode.Minus then
+        Enabled = not Enabled
+    end
+
     if input.KeyCode == Enum.KeyCode.W then
         W = true
 
@@ -110,7 +115,8 @@ end)
 
 RunService.RenderStepped:Connect(function()
 
-    if Mode ~= 3
+    if not Enabled
+    or Mode ~= 3
     or not Humanoid then
         return
     end
@@ -140,6 +146,10 @@ RunService:BindToRenderStep(
     "CustomCamera",
     Enum.RenderPriority.Camera.Value + 1,
     function()
+
+        if not Enabled then
+            return
+        end
 
         if not Character
         or not Head
