@@ -1099,9 +1099,19 @@ title.BorderSizePixel = 0
 local titleCorner = Instance.new("UICorner", title)
 titleCorner.CornerRadius = UDim.new(0, 0)
 
+local close = Instance.new("TextButton", frame)
+close.Size = UDim2.new(0, 36, 0, 36)
+close.Position = UDim2.new(1, -36, 0, 0)
+close.Text = "x"
+close.Font = Enum.Font.BuilderSansExtraBold
+close.TextSize = 20
+close.TextColor3 = Color3.new(1, 1, 1)
+close.BackgroundTransparency = 1
+close.BorderSizePixel = 0
+
 local minimize = Instance.new("TextButton", frame)
 minimize.Size = UDim2.new(0, 36, 0, 36)
-minimize.Position = UDim2.new(1, -36, 0, 0)
+minimize.Position = UDim2.new(1, -60, 0, 0)
 minimize.Text = "-"
 minimize.Font = Enum.Font.BuilderSansExtraBold
 minimize.TextSize = 24
@@ -1340,6 +1350,10 @@ moveMethodBtn.MouseButton1Click:Connect(function()
 	moveMethodBtn.Text = "Move: " .. (currentMoveMethod == MoveMethods.TPPOS and "tpPos" or "tweenTpPos")
 end)
 
+close.MouseButton1Click:Connect(function()
+    frame:Destroy()
+end)
+
 minimize.MouseButton1Click:Connect(function()
 	minimized = not minimized
 	if minimized then
@@ -1349,7 +1363,7 @@ minimize.MouseButton1Click:Connect(function()
 		frame.Position = UDim2.new(0, 10, 1, -46)
 	else
 		content.Visible = true
-		frame.Size = UDim2.new(0, 369, 0, 220)
+		frame.Size = UDim2.new(0, 369, 0, 188)
 		frame.Position = savedFramePos or frame.Position
 	end
 end)
