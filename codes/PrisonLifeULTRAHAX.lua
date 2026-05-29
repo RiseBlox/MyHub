@@ -1,8 +1,3 @@
-if getgenv().haxloaded then
-    return
-end
-
-getgenv().haxloaded = true
 local function processPart(obj)
     if obj:IsA("BasePart") then
         obj.Transparency = 0.75
@@ -87,8 +82,17 @@ local Buttons = {
     { name = "GetRemington", text="Get Remington 870"},
     { name = "GetAK", text = "Get AK-47"}
 }
-ScreenGui.Parent = game:WaitForChild("CoreGui")
-ScreenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+
+pcall(function()
+    Players.LocalPlayer:WaitForChild("PlayerGui"):FindFirstChild("ULTRAHAX"):Destroy()
+end)
+
+ScreenGui.Parent = Players.LocalPlayer:WaitForChild("PlayerGui")
+ScreenGui.Name = "ULTRAHAX"
+ScreenGui.ResetOnSpawn = false
+ScreenGui.DisplayOrder = 999999
+ScreenGui.ZIndexBehavior = Enum.ZIndexBehavior.Global
+ScreenGui.IgnoreGuiInset = true
 Frame.Parent = ScreenGui
 Frame.BackgroundTransparency = 0.25
 Frame.BackgroundColor3 = Color3.fromRGB(25,25,25)

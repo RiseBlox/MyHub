@@ -1063,6 +1063,10 @@ local function runLoader()
 	setProgress(0, "Complete")
 end
 
+pcall(function()
+    player.PlayerGui:FindFirstChild("MapLoader"):Destroy()
+end)
+
 gui = Instance.new("ScreenGui", player.PlayerGui)
 gui.Name = "MapLoader"
 gui.ResetOnSpawn = false

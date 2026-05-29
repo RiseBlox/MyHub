@@ -44,8 +44,16 @@ UserInputService.InputBegan:Connect(function(input, gp)
     end
 end)
 
+pcall(function()
+    player:WaitForChild("PlayerGui"):FindFirstChild("SUPERSPEED"):Destroy()
+end)
+
 local gui = Instance.new("ScreenGui")
+gui.Name = "SUPERSPEED"
 gui.ResetOnSpawn = false
+gui.ZIndexBehavior = Enum.ZIndexBehavior.Global
+gui.IgnoreGuiInset = true
+gui.DisplayOrder = 99999
 gui.Parent = player:WaitForChild("PlayerGui")
 
 local function makeDraggable(btn)
@@ -73,10 +81,15 @@ local function makeDraggable(btn)
     end)
 end
 
+
 local speedBtn = Instance.new("TextButton")
 speedBtn.Size = UDim2.fromOffset(180, 45)
 speedBtn.Position = UDim2.new(0, 20, 0.45, 0)
+speedBtn.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
 speedBtn.Text = "Toggle SUPERSPEED [X]"
+speedBtn.TextColor3 = Color3.fromRGB(0, 0, 0)
+speedBtn.Font = Enum.Font.BuilderSansExtraBold
+speedBtn.TextSize = 15
 speedBtn.Parent = gui
 makeDraggable(speedBtn)
 

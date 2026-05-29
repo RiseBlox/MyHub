@@ -67,6 +67,11 @@ if not cfg then
 end
 
 local p = game:GetService("Players").LocalPlayer
+
+pcall(function()
+    p:WaitForChild("PlayerGui"):FindFirstChild("KeyUI"):Destroy()
+end)
+
 local g = Instance.new("ScreenGui", p:WaitForChild("PlayerGui"))
 g.Name = "KeyUI"
 g.ResetOnSpawn = false

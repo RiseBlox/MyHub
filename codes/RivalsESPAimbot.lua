@@ -24,10 +24,16 @@ local origLighting = {
 }
 local origReflectance = {}
 
+pcall(function()
+    playerGui:FindFirstChild("ColorSliderGui"):Destroy()
+end)
+
 local screenGui = Instance.new("ScreenGui")
 screenGui.Name = "ColorSliderGui"
 screenGui.ResetOnSpawn = false
-screenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+screenGui.DisplayOrder = 999999
+screenGui.ZIndexBehavior = Enum.ZIndexBehavior.Global
+screenGui.IgnoreGuiInset = true
 screenGui.Parent = playerGui
 
 local bgBox = Instance.new("Frame")
