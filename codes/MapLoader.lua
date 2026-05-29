@@ -1066,7 +1066,9 @@ end
 gui = Instance.new("ScreenGui", player.PlayerGui)
 gui.Name = "MapLoader"
 gui.ResetOnSpawn = false
-gui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+gui.DisplayOrder = 999999
+gui.ZIndexBehavior = Enum.ZIndexBehavior.Global
+gui.IgnoreGuiInset = true
 
 frame = Instance.new("Frame", gui)
 frame.Size = UDim2.new(0, 369, 0, 188)
