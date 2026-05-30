@@ -3,48 +3,75 @@ local configs = {
 		name = "Project Auto - Auto Rob",
 		key = "https://discord.gg/projectauto",
 		load = "https://scripts.projectauto.xyz/AutoRobV6",
-		free = {
-			load = "https://scripts.projectauto.xyz/AutoRobV6"
+		free = true,
+		palette = {
+			main = "#560da3",
+			box = "#220541",
+			text = "#ffffff"
 		}
 	},
 	paarrest = {
 		name = "Project Auto - Auto Arrest",
 		key = "https://discord.gg/projectauto",
 		load = "https://scripts.projectauto.xyz/AutoArrestV4",
-		free = {
-			load = "https://scripts.projectauto.xyz/AutoArrestV4"
+		free = true,
+		palette = {
+			main = "#560da3",
+			box = "#220541",
+			text = "#ffffff"
 		}
 	},
 	ufrob = {
 		name = "Universal Farm - Auto Rob",
 		key = "https://discord.gg/universalfarm",
 		load = "https://api.luarmor.net/files/v3/loaders/cf83df89dc364d86bafd481d72bdd953.lua",
-		free = {
-			load = "https://api.luarmor.net/files/v3/loaders/cf83df89dc364d86bafd481d72bdd953.lua"
+		free = true,
+		palette = {
+			main = "#4d6cf8",
+			box = "#1f2b63",
+			text = "#ffffff"
 		}
 	},
 	ufarrest = {
 		name = "Universal Farm - Auto Arrest",
 		key = "https://discord.gg/universalfarm",
 		load = "https://api.luarmor.net/files/v3/loaders/ef2b75a1c0445997d44b7371f11ee88a.lua",
-		free = {
-			load = "https://api.luarmor.net/files/v3/loaders/ef2b75a1c0445997d44b7371f11ee88a.lua"
+		free = true,
+		palette = {
+			main = "#4d6cf8",
+			box = "#1f2b63",
+			text = "#ffffff"
 		}
 	},
 	ufcrate = {
 		name = "Universal Farm - Crate Farm",
 		key = "https://discord.gg/universalfarm",
-		load = "https://api.luarmor.net/files/v3/loaders/f97ac4e22e08eebaa6c0d99682cd0995.lua"
+		load = "https://api.luarmor.net/files/v3/loaders/f97ac4e22e08eebaa6c0d99682cd0995.lua",
+		palette = {
+			main = "#4d6cf8",
+			box = "#1f2b63",
+			text = "#ffffff"
+		}
 	},
 	vyn = {
 		name = "Vynixius / Astral",
 		key = "https://vynixius.win/getkey",
-		load = "https://vynixius.win/loader.luau"
+		load = "https://vynixius.win/loader.luau",
+		palette = {
+			main = "#02ba4b",
+			box = "#00401a",
+			text = "#ffffff"
+		}
 	},
 	msp = {
 		name = "mspaint",
 		key = "https://www.mspaint.cc/key",
-		load = "https://api.luarmor.net/files/v3/loaders/002c19202c9946e6047b0c6e0ad51f84.lua"
+		load = "https://api.luarmor.net/files/v3/loaders/002c19202c9946e6047b0c6e0ad51f84.lua",
+		palette = {
+			main = "#92bde0",
+			box = "#495f70",
+			text = "#000000"
+		}
 	},
 }
 
@@ -94,7 +121,7 @@ stroke.Transparency = 0.75
 
 local top = Instance.new("Frame", main)
 top.Size = UDim2.new(1,0,0,32)
-top.BackgroundColor3 = Color3.fromHex("#23456d")
+top.BackgroundColor3 = Color3.fromHex(cfg.palette.main)
 top.BorderSizePixel = 0
 
 local title = Instance.new("TextLabel", top)
@@ -104,7 +131,7 @@ title.BackgroundTransparency = 1
 title.Text = cfg.name
 title.Font = Enum.Font.SourceSansBold
 title.TextSize = 16
-title.TextColor3 = Color3.new(1,1,1)
+title.TextColor3 = Color3.fromHex(cfg.palette.text)
 
 local close = Instance.new("TextButton", top)
 close.Size = UDim2.new(0,32,1,0)
@@ -113,38 +140,38 @@ close.BackgroundTransparency = 1
 close.Text = "X"
 close.Font = Enum.Font.SourceSansBold
 close.TextSize = 18
-close.TextColor3 = Color3.new(1,1,1)
+close.TextColor3 = Color3.fromHex(cfg.palette.text)
 
 local box = Instance.new("TextBox", main)
 box.Size = UDim2.new(.9,0,0,30)
 box.Position = UDim2.new(.05,0,0,43)
-box.BackgroundColor3 = Color3.fromHex("#1d2f49")
+box.BackgroundColor3 = Color3.fromHex(cfg.palette.box)
 box.BorderSizePixel = 0
 box.PlaceholderText = cfg.free and 'Enter Key (Premium) or "FREE"' or "Enter Key Here"
 box.Text = ""
 box.Font = Enum.Font.SourceSansBold
 box.TextSize = 16
-box.TextColor3 = Color3.new(1,1,1)
+box.TextColor3 = Color3.fromHex(cfg.palette.text)
 
 local get = Instance.new("TextButton", main)
 get.Size = UDim2.new(.43,0,0,30)
 get.Position = UDim2.new(.05,0,.96,-40)
-get.BackgroundColor3 = Color3.fromHex("#23456d")
+get.BackgroundColor3 = Color3.fromHex(cfg.palette.main)
 get.BorderSizePixel = 0
 get.Text = "Get Key"
 get.Font = Enum.Font.SourceSansBold
 get.TextSize = 16
-get.TextColor3 = Color3.new(1,1,1)
+get.TextColor3 = Color3.fromHex(cfg.palette.text)
 
 local enter = Instance.new("TextButton", main)
 enter.Size = UDim2.new(.43,0,0,30)
 enter.Position = UDim2.new(.516,0,.96,-40)
-enter.BackgroundColor3 = Color3.fromHex("#23456d")
+enter.BackgroundColor3 = Color3.fromHex(cfg.palette.main)
 enter.BorderSizePixel = 0
 enter.Text = "Enter"
 enter.Font = Enum.Font.SourceSansBold
 enter.TextSize = 16
-enter.TextColor3 = Color3.new(1,1,1)
+enter.TextColor3 = Color3.fromHex(cfg.palette.text)
 
 close.MouseButton1Click:Connect(function()
 	g:Destroy()
@@ -161,7 +188,7 @@ enter.MouseButton1Click:Connect(function()
 		g:Destroy()
 
 		if cfg.free and key:upper() == "FREE" then
-			loadstring(game:HttpGet(cfg.free.load, true))()
+			loadstring(game:HttpGet(cfg.load, true))()
 			return
 		end
 
