@@ -1,6 +1,15 @@
 local ussiprepass = loadstring(game:HttpGet("https://gitlab.com/centerepic/ussiprepass/-/raw/main/main.luau", true))()
 
-local Options = {}
+local Options = {
+    ReadMe = false,
+	ShutdownWhenDone = true,
+	mode = "full",
+	timeout = -1,
+	SaveBytecode = true,
+	DecompileIgnore = {},
+	IgnoreList = {},
+	TreatUnionsAsParts = true
+}
 
 local PrepassOptions = {
     RequestsPerMinute = 1475,
