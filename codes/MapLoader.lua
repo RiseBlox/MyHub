@@ -2,7 +2,6 @@ local Players = game:GetService("Players")
 local Workspace = game:GetService("Workspace")
 local TweenService = game:GetService("TweenService")
 local RunService = game:GetService("RunService")
-local ContentProvider = game:GetService("ContentProvider")
 local UserInputService = game:GetService("UserInputService")
 
 local player = Players.LocalPlayer
@@ -106,18 +105,12 @@ local currentFlyMethod = FlyMethods.CFLY
 local currentMoveMethod = MoveMethods.TPPOS
 local tweenSpeedForMovement = 0.5
 
-local HEIGHT_OFFSET = 150
-local SWEEP_WAIT = 0.15
-local ROAM_RADIUS = 80
-local ROAM_BOPS = 4
 local ROAM_WAIT = 0.35
-local LOOK_DOWN_OFFSET = Vector3.new(0, -300, 0)
 
-local STREAMING_TIMEOUT = 15
-local STABILITY_CHECK_INTERVAL = 0.5
+local STREAMING_TIMEOUT = 25
+local STABILITY_CHECK_INTERVAL = 0.25
 local STABILITY_REQUIRED_TIME = 2
 local MAX_CHUNK_RETRIES = 3
-local GROWTH_THRESHOLD = 5
 
 local GAME_ID = game.PlaceId
 local JAILBREAK_ID = 606849621
@@ -408,6 +401,8 @@ local function stopFly()
 	end
 end
 
+local stopRequested = false
+
 local function hopAroundChunk(chunkPos, duration)
 	local elapsed = 0
 	local hopInterval = currentStrategy.hopInterval
@@ -515,11 +510,9 @@ local function shouldUseBoundedMode(bounds)
 	return false, nil
 end
 
-local HEIGHT_VEC = Vector3.new(0, HEIGHT_OFFSET, 0)
 local DUMMY_FOLDER = Instance.new("Folder")
 
 local running = false
-local stopRequested = false
 local minimized = false
 
 local originalCFrame
@@ -566,32 +559,6 @@ local function setProgress(alpha, text)
 	progressFill.Size = UDim2.new(math.clamp(alpha, 0, 1), 0, 1, 0)
 	progressText.Text = text
 	barBg.BackgroundColor3 = Color3.fromHex("#1d2f49")
-end
-
-local function cameraAboveLookingAt(targetPos)
-	local camPos = targetPos + HEIGHT_VEC
-	return CFrame.lookAt(camPos, targetPos + LOOK_DOWN_OFFSET)
-end
-
-local function randomBop(center)
-	local offset = Vector3.new(
-		math.random(-ROAM_RADIUS, ROAM_RADIUS),
-		0,
-		math.random(-ROAM_RADIUS, ROAM_RADIUS)
-	)
-	return cameraAboveLookingAt(center + offset)
-end
-
-local function tweenTo(targetPos)
-	local cf = cameraAboveLookingAt(targetPos)
-	local tween = TweenService:Create(
-		camera,
-		TweenInfo.new(currentStrategy.sweepTween, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut),
-		{ CFrame = cf }
-	)
-	tween:Play()
-	tween.Completed:Wait()
-	task.wait(SWEEP_WAIT)
 end
 
 local function generateBoundedGrid(config)
@@ -644,7 +611,6 @@ local function verifyChunkStable(position, radius)
 	local lastCount = countPartsInRadius(position, radius)
 	local stableTime = 0
 	local maxCount = lastCount
-	local pendingGrowth = 0
 
 	pcall(function()
 		task.spawn(function()
@@ -663,14 +629,9 @@ local function verifyChunkStable(position, radius)
 		local delta = math.max(0, currentCount - lastCount)
 
 		if delta > 0 then
-			pendingGrowth += delta
-			if pendingGrowth >= GROWTH_THRESHOLD then
-				maxCount = math.max(maxCount, currentCount)
-				pendingGrowth = 0
-				stableTime = 0
-			end
+			stableTime = 0
+			maxCount = math.max(maxCount, currentCount)
 		else
-			pendingGrowth = math.max(0, pendingGrowth - 1)
 			stableTime += STABILITY_CHECK_INTERVAL
 		end
 
@@ -810,7 +771,6 @@ local function executePhase1(centers)
 
 		globalDone += 1
 
-		camera.CFrame = cameraAboveLookingAt(center.position)
 		hopAroundChunk(center.position, currentStrategy.fastWait)
 
 		if not skipStability then
@@ -830,6 +790,8 @@ end
 local function executePhase2(columns)
 	if not StateMachine:transition(States.PHASE2) then return false end
 
+    setRendering(false)
+
 	local skipStability = currentGameConfig and currentGameConfig.skipStabilityCheck
 
 	for col = 0, math.huge do
@@ -845,10 +807,6 @@ local function executePhase2(columns)
 
 			globalDone += 1
 
-			pcall(function()
-				tweenTo(c.position)
-			end)
-
 			hopAroundChunk(c.position, currentStrategy.fastWait)
 
 			if not skipStability then
@@ -862,6 +820,7 @@ local function executePhase2(columns)
 		end
 	end
 
+    setRendering(true)
 	return true
 end
 
@@ -872,14 +831,8 @@ local function executeRoaming(centers)
 
 	while not stopRequested do
 		local center = centers[math.random(1, #centers)]
-		tweenTo(center.position)
 		moveCharacter(center.position)
-
-		for i = 1, ROAM_BOPS do
-			if stopRequested then return false end
-			camera.CFrame = randomBop(center.position)
-			task.wait(ROAM_WAIT)
-		end
+		task.wait(ROAM_WAIT)
 	end
 
 	return true
@@ -891,7 +844,6 @@ local function runLoader()
 
 	originalCFrame = camera.CFrame
 	originalCameraType = camera.CameraType
-	camera.CameraType = Enum.CameraType.Scriptable
 
 	startFly()
 
@@ -920,10 +872,6 @@ local function runLoader()
 	if currentGameConfig and currentGameConfig.useCustomBounds then
 		print("[MapLoader] Detected:", currentGameConfig.name)
 		print("[MapLoader] Using custom bounds and optimized settings")
-
-		if currentGameConfig.heightOffset then
-			HEIGHT_VEC = Vector3.new(0, currentGameConfig.heightOffset, 0)
-		end
 
 		chunkCenters = generateBoundedGrid(currentGameConfig)
 
@@ -1183,6 +1131,11 @@ flyMethodBtn.AutoButtonColor = false
 local flyCorner = Instance.new("UICorner", flyMethodBtn)
 flyCorner.CornerRadius = UDim.new(0, 0)
 
+if GAME_ID == JAILBREAK_ID then
+	flyMethodBtn.TextColor3 = Color3.new(0.5, 0.5, 0.5)
+	flyMethodBtn.AutoButtonColor = false
+end
+
 moveMethodBtn = Instance.new("TextButton", content)
 moveMethodBtn.Size = UDim2.new(0.4645, 0, 0, 28)
 moveMethodBtn.Position = UDim2.new(0.03, 176, 0, 74)
@@ -1196,6 +1149,11 @@ moveMethodBtn.AutoButtonColor = false
 
 local moveCorner = Instance.new("UICorner", moveMethodBtn)
 moveCorner.CornerRadius = UDim.new(0, 0)
+
+if GAME_ID == JAILBREAK_ID then
+	moveMethodBtn.TextColor3 = Color3.new(0.5, 0.5, 0.5)
+	moveMethodBtn.AutoButtonColor = false
+end
 
 actionBtn = Instance.new("TextButton", content)
 actionBtn.Size = UDim2.new(0.94, 0, 0, 32)
@@ -1249,21 +1207,25 @@ strategyBtn.MouseLeave:Connect(function()
 end)
 
 flyMethodBtn.MouseEnter:Connect(function()
+	if GAME_ID == JAILBREAK_ID then return end
 	flyHovering = true
 	flyMethodBtn.BackgroundColor3 = BTN_OPTION_HOVER
 end)
 
 flyMethodBtn.MouseLeave:Connect(function()
+	if GAME_ID == JAILBREAK_ID then return end
 	flyHovering = false
 	flyMethodBtn.BackgroundColor3 = BTN_OPTION_DEFAULT
 end)
 
 moveMethodBtn.MouseEnter:Connect(function()
+	if GAME_ID == JAILBREAK_ID then return end
 	moveHovering = true
 	moveMethodBtn.BackgroundColor3 = BTN_OPTION_HOVER
 end)
 
 moveMethodBtn.MouseLeave:Connect(function()
+	if GAME_ID == JAILBREAK_ID then return end
 	moveHovering = false
 	moveMethodBtn.BackgroundColor3 = BTN_OPTION_DEFAULT
 end)
@@ -1331,7 +1293,7 @@ strategyBtn.MouseButton1Click:Connect(function()
 end)
 
 flyMethodBtn.MouseButton1Click:Connect(function()
-	if running then return end
+    if running or GAME_ID == JAILBREAK_ID then return end
 
 	if currentFlyMethod == FlyMethods.CFLY then
 		currentFlyMethod = FlyMethods.SFLY
@@ -1343,7 +1305,7 @@ flyMethodBtn.MouseButton1Click:Connect(function()
 end)
 
 moveMethodBtn.MouseButton1Click:Connect(function()
-	if running then return end
+	if running or GAME_ID == JAILBREAK_ID then return end
 
 	if currentMoveMethod == MoveMethods.TPPOS then
 		currentMoveMethod = MoveMethods.TWEENTPPOS
