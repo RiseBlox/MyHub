@@ -1,4 +1,4 @@
-local ussiprepass = loadstring(game:HttpGet("https://gitlab.com/centerepic/ussiprepass/-/raw/main/main.luau", true))()
+local ussiprepass = loadstring(game:HttpGet("https://raw.githubusercontent.com/RiseBlox/MyHub/main/codes/SIPrePass.luau", true))()
 
 local Options = {
     ReadMe = false,
@@ -8,11 +8,11 @@ local Options = {
 	SaveBytecode = true,
 	DecompileIgnore = {},
 	IgnoreList = {},
-	TreatUnionsAsParts = true
+	TreatUnionsAsParts = false
 }
 
 local PrepassOptions = {
-    RequestsPerMinute = 1475,
+    RequestsPerMinute = 1495,
     MaxInFlight       = 30,
     ApiUrl            = "https://api.lua.expert/decompile",
     Verbose           = true,

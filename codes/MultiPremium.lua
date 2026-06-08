@@ -68,9 +68,19 @@ local configs = {
 		key = "https://www.mspaint.cc/key",
 		load = "https://api.luarmor.net/files/v3/loaders/002c19202c9946e6047b0c6e0ad51f84.lua",
 		palette = {
-			main = "#92bde0",
-			box = "#495f70",
+			main = "#7dc4ff",
+			box = "#324e66",
 			text = "#000000"
+		}
+	},
+	kicia = {
+		name = "KiciaHook",
+		key = "https://ads.luarmor.net/get_key?for=-SMXIkbgLHBUc",
+		load = "https://raw.githubusercontent.com/kiciahook/kiciahook/main/loader.luau",
+		palette = {
+			main = "#d4675f",
+			box = "#472220",
+			text = "#ffffff"
 		}
 	},
 }

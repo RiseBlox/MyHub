@@ -8,11 +8,11 @@ local Options = {
 	SaveBytecode = true,
 	DecompileIgnore = {},
 	IgnoreList = {},
-	TreatUnionsAsParts = true
+	TreatUnionsAsParts = false
 }
 
 local PrepassOptions = {
-    RequestsPerMinute = 1475,
+    RequestsPerMinute = 1495,
     MaxInFlight       = 30,
     ApiUrl            = "https://api.lua.expert/decompile",
     Verbose           = true,
