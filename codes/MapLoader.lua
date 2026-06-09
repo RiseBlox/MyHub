@@ -432,23 +432,12 @@ end
 local function calculateMapBounds()
 	print("[MapLoader] Calculating map bounds...")
 
-	local minX, maxX = math.huge, -math.huge
-	local minY, maxY = math.huge, -math.huge
-	local minZ, maxZ = math.huge, -math.huge
+	local positions = {}
 	local partCount = 0
 
 	for _, part in ipairs(Workspace:GetDescendants()) do
 		if part:IsA("BasePart") and part.Anchored then
-			local pos = part.Position
-			local size = part.Size
-
-			minX = math.min(minX, pos.X - size.X/2)
-			maxX = math.max(maxX, pos.X + size.X/2)
-			minY = math.min(minY, pos.Y - size.Y/2)
-			maxY = math.max(maxY, pos.Y + size.Y/2)
-			minZ = math.min(minZ, pos.Z - size.Z/2)
-			maxZ = math.max(maxZ, pos.Z + size.Z/2)
-
+			table.insert(positions, part.Position)
 			partCount += 1
 
 			if partCount % 500 == 0 then
@@ -457,7 +446,39 @@ local function calculateMapBounds()
 		end
 	end
 
-	if minX == math.huge then return nil end
+	if #positions == 0 then return nil end
+
+	-- Statistical filtering: trim outliers
+	local function trimOutliers(coords)
+		table.sort(coords)
+		local n = #coords
+		local q1_idx = math.floor(n * 0.25)
+		local q3_idx = math.floor(n * 0.75)
+		
+		if q1_idx < 1 then q1_idx = 1 end
+		if q3_idx > n then q3_idx = n end
+		
+		local q1 = coords[q1_idx]
+		local q3 = coords[q3_idx]
+		local iqr = q3 - q1
+		local lowerBound = q1 - (1.5 * iqr)
+		local upperBound = q3 + (1.5 * iqr)
+		
+		return lowerBound, upperBound
+	end
+
+	-- Extract X, Y, Z separately
+	local xCoords, yCoords, zCoords = {}, {}, {}
+	for _, pos in ipairs(positions) do
+		table.insert(xCoords, pos.X)
+		table.insert(yCoords, pos.Y)
+		table.insert(zCoords, pos.Z)
+	end
+
+	-- Trim each axis
+	local minX, maxX = trimOutliers(xCoords)
+	local minY, maxY = trimOutliers(yCoords)
+	local minZ, maxZ = trimOutliers(zCoords)
 
 	local avgY = (minY + maxY) / 2
 
@@ -479,6 +500,47 @@ local function calculateOptimalSpacing(dimensions)
 	return math.clamp(spacing, 300, 1000)
 end
 
+local function hasTerrainInMap()
+	if not gethiddenproperty then return false end
+	pcall(function()
+		writefile("MLSG.txt", gethiddenproperty(workspace.Terrain, "SmoothGrid"))
+		writefile("MLPG.txt", gethiddenproperty(workspace.Terrain, "PhysicsGrid"))
+	end)
+	
+	task.wait(0.5)
+	
+	local smoothGridContent = ""
+	local physicsGridContent = ""
+	
+	pcall(function()
+		smoothGridContent = readfile("MLSG.txt") or ""
+		physicsGridContent = readfile("MLPG.txt") or ""
+	end)
+	
+	local hasContent =
+		(smoothGridContent ~= "" and smoothGridContent ~= "nil") or
+		(physicsGridContent ~= "" and physicsGridContent ~= "nil")
+	
+	pcall(function()
+		delfile("MLSG.txt")
+		delfile("MLPG.txt")
+	end)
+
+	return hasContent
+end
+
+local function expandBounds(bounds, offset)
+	return {
+		topLeft = bounds.topLeft - Vector3.new(offset, 0, offset),
+		topRight = bounds.topRight + Vector3.new(offset, 0, offset),
+		bottomLeft = bounds.bottomLeft - Vector3.new(offset, 0, offset),
+		bottomRight = bounds.bottomRight + Vector3.new(offset, 0, offset),
+		center = bounds.center,
+		dimensions = bounds.dimensions + Vector3.new(offset * 2, 0, offset * 2),
+		partCount = bounds.partCount
+	}
+end
+
 local function shouldUseBoundedMode(bounds)
 	if not bounds then return false, nil end
 
@@ -486,6 +548,13 @@ local function shouldUseBoundedMode(bounds)
 
 	if dims.X > 3000 or dims.Z > 3000 then
 		local spacing = calculateOptimalSpacing(dims)
+
+		if hasTerrainInMap() then
+			bounds = expandBounds(bounds, 2048)
+			print("[MapLoader] Terrain detected, expanding bounds by 2048 studs")
+		else
+			print("[MapLoader] No Terrain detected")
+		end
 
 		print(string.format("[MapLoader] Large map detected: %.0f x %.0f studs", dims.X, dims.Z))
 		print(string.format("[MapLoader] Using bounded mode with %.0f stud spacing", spacing))
@@ -1131,11 +1200,6 @@ flyMethodBtn.AutoButtonColor = false
 local flyCorner = Instance.new("UICorner", flyMethodBtn)
 flyCorner.CornerRadius = UDim.new(0, 0)
 
-if GAME_ID == JAILBREAK_ID then
-	flyMethodBtn.TextColor3 = Color3.new(0.5, 0.5, 0.5)
-	flyMethodBtn.AutoButtonColor = false
-end
-
 moveMethodBtn = Instance.new("TextButton", content)
 moveMethodBtn.Size = UDim2.new(0.4645, 0, 0, 28)
 moveMethodBtn.Position = UDim2.new(0.03, 176, 0, 74)
@@ -1149,11 +1213,6 @@ moveMethodBtn.AutoButtonColor = false
 
 local moveCorner = Instance.new("UICorner", moveMethodBtn)
 moveCorner.CornerRadius = UDim.new(0, 0)
-
-if GAME_ID == JAILBREAK_ID then
-	moveMethodBtn.TextColor3 = Color3.new(0.5, 0.5, 0.5)
-	moveMethodBtn.AutoButtonColor = false
-end
 
 actionBtn = Instance.new("TextButton", content)
 actionBtn.Size = UDim2.new(0.94, 0, 0, 32)
@@ -1186,6 +1245,19 @@ local strategyHovering = false
 local flyHovering = false
 local moveHovering = false
 
+local isJailbreak = currentGameConfig and currentGameConfig.name == "Jailbreak"
+
+local darkenedOptionDefault = Color3.fromHex("#122337")
+local darkenedOptionHover = Color3.fromHex("#142d4b")
+local darkenedOptionDown = Color3.fromHex("#08284b")
+
+if isJailbreak then
+	flyMethodBtn.BackgroundColor3 = darkenedOptionDefault
+	moveMethodBtn.BackgroundColor3 = darkenedOptionDefault
+	flyMethodBtn.TextColor3 = Color3.fromHex("#4c4c4c")
+	moveMethodBtn.TextColor3 = Color3.fromHex("#4c4c4c")
+end
+
 actionBtn.MouseEnter:Connect(function()
 	actionHovering = true
 	actionBtn.BackgroundColor3 = running and BTN_STOP_HOVER or BTN_ACTION_HOVER
@@ -1207,27 +1279,39 @@ strategyBtn.MouseLeave:Connect(function()
 end)
 
 flyMethodBtn.MouseEnter:Connect(function()
-	if GAME_ID == JAILBREAK_ID then return end
 	flyHovering = true
-	flyMethodBtn.BackgroundColor3 = BTN_OPTION_HOVER
+	if isJailbreak then
+		flyMethodBtn.BackgroundColor3 = darkenedOptionHover
+	else
+		flyMethodBtn.BackgroundColor3 = BTN_OPTION_HOVER
+	end
 end)
 
 flyMethodBtn.MouseLeave:Connect(function()
-	if GAME_ID == JAILBREAK_ID then return end
 	flyHovering = false
-	flyMethodBtn.BackgroundColor3 = BTN_OPTION_DEFAULT
+	if isJailbreak then
+		flyMethodBtn.BackgroundColor3 = darkenedOptionDefault
+	else
+		flyMethodBtn.BackgroundColor3 = BTN_OPTION_DEFAULT
+	end
 end)
 
 moveMethodBtn.MouseEnter:Connect(function()
-	if GAME_ID == JAILBREAK_ID then return end
 	moveHovering = true
-	moveMethodBtn.BackgroundColor3 = BTN_OPTION_HOVER
+	if isJailbreak then
+		moveMethodBtn.BackgroundColor3 = darkenedOptionHover
+	else
+		moveMethodBtn.BackgroundColor3 = BTN_OPTION_HOVER
+	end
 end)
 
 moveMethodBtn.MouseLeave:Connect(function()
-	if GAME_ID == JAILBREAK_ID then return end
 	moveHovering = false
-	moveMethodBtn.BackgroundColor3 = BTN_OPTION_DEFAULT
+	if isJailbreak then
+		moveMethodBtn.BackgroundColor3 = darkenedOptionDefault
+	else
+		moveMethodBtn.BackgroundColor3 = BTN_OPTION_DEFAULT
+	end
 end)
 
 actionBtn.MouseButton1Down:Connect(function()
@@ -1251,19 +1335,35 @@ strategyBtn.MouseButton1Up:Connect(function()
 end)
 
 flyMethodBtn.MouseButton1Down:Connect(function()
-	flyMethodBtn.BackgroundColor3 = BTN_OPTION_DOWN
+	if isJailbreak then
+		flyMethodBtn.BackgroundColor3 = darkenedOptionDown
+	else
+		flyMethodBtn.BackgroundColor3 = BTN_OPTION_DOWN
+	end
 end)
 
 flyMethodBtn.MouseButton1Up:Connect(function()
-	flyMethodBtn.BackgroundColor3 = flyHovering and BTN_OPTION_HOVER or BTN_OPTION_DEFAULT
+	if isJailbreak then
+		flyMethodBtn.BackgroundColor3 = flyHovering and darkenedOptionHover or darkenedOptionDefault
+	else
+		flyMethodBtn.BackgroundColor3 = flyHovering and BTN_OPTION_HOVER or BTN_OPTION_DEFAULT
+	end
 end)
 
 moveMethodBtn.MouseButton1Down:Connect(function()
-	moveMethodBtn.BackgroundColor3 = BTN_OPTION_DOWN
+	if isJailbreak then
+		moveMethodBtn.BackgroundColor3 = darkenedOptionDown
+	else
+		moveMethodBtn.BackgroundColor3 = BTN_OPTION_DOWN
+	end
 end)
 
 moveMethodBtn.MouseButton1Up:Connect(function()
-	moveMethodBtn.BackgroundColor3 = moveHovering and BTN_OPTION_HOVER or BTN_OPTION_DEFAULT
+	if isJailbreak then
+		moveMethodBtn.BackgroundColor3 = moveHovering and darkenedOptionHover or darkenedOptionDefault
+	else
+		moveMethodBtn.BackgroundColor3 = moveHovering and BTN_OPTION_HOVER or BTN_OPTION_DEFAULT
+	end
 end)
 
 actionBtn.MouseButton1Click:Connect(function()
