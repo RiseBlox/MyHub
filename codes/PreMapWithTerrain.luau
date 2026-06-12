@@ -1,14 +1,14 @@
 local ussiprepass = loadstring(game:HttpGet("https://raw.githubusercontent.com/RiseBlox/MyHub/main/codes/SIPrePass.luau", true))()
 
 local Options = {
-	ReadMe = false,
-	ShutdownWhenDone = true,
-	mode = "full",
-	timeout = -1,
-	SaveBytecode = true,
-	DecompileIgnore = {},
-	IgnoreList = {},
-	TreatUnionsAsParts = false
+    ReadMe = false,
+    ShutdownWhenDone = true,
+    mode = "full",
+    timeout = -1,
+    SaveBytecode = true,
+    DecompileIgnore = {},
+    IgnoreList = {},
+    TreatUnionsAsParts = false
 }
 
 local PrepassOptions = {

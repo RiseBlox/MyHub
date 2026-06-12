@@ -2,13 +2,13 @@ local ussiprepass = loadstring(game:HttpGet("https://raw.githubusercontent.com/R
 
 local Options = {
     ReadMe = false,
-	ShutdownWhenDone = true,
-	mode = "full",
-	timeout = -1,
-	SaveBytecode = true,
-	DecompileIgnore = {},
-	IgnoreList = {},
-	TreatUnionsAsParts = false
+    ShutdownWhenDone = true,
+    mode = "full",
+    timeout = -1,
+    SaveBytecode = true,
+    DecompileIgnore = {},
+    IgnoreList = {},
+    TreatUnionsAsParts = false
 }
 
 local PrepassOptions = {
