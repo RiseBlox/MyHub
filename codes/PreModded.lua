@@ -9,6 +9,8 @@ local Options = {
     DecompileIgnore = {},
     IgnoreList = {},
     SafeMode = true,
+    SetStreaming = false,
+    DecompilePrepass = false,
 }
 
 local PrepassOptions = {
@@ -19,7 +21,7 @@ local PrepassOptions = {
     SkipPrepass       = false,
     SkipSaveInstance  = false,
     UssiRepoURL       = "https://raw.githubusercontent.com/RiseBlox/MyHub/main/codes/",
-    UssiScript        = "SIMapOnly",
+    UssiScript        = "SIModded",
 }
 
 ussiprepass(Options, PrepassOptions)

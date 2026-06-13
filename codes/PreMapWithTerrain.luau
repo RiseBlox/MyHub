@@ -8,7 +8,7 @@ local Options = {
     SaveBytecode = true,
     DecompileIgnore = {},
     IgnoreList = {},
-    TreatUnionsAsParts = false
+    SafeMode = true,
 }
 
 local PrepassOptions = {
