@@ -113,17 +113,16 @@ local STABILITY_REQUIRED_TIME = 2
 local MAX_CHUNK_RETRIES = 3
 
 local GAME_ID = game.PlaceId
-local JAILBREAK_ID = 606849621
 
 local GameConfigs = {
-	[JAILBREAK_ID] = {
+	[606849621] = {
 		name = "Jailbreak",
 		useCustomBounds = true,
 		bounds = {
-			topLeft = Vector3.new(-2728.112, 15.561, -6993.061),
-			topRight = Vector3.new(4295.353, 16.177, -5742.102),
-			bottomLeft = Vector3.new(-4195.167, 15.524, 3584.259),
-			bottomRight = Vector3.new(3438.196, 16.177, 3863.812)
+			topLeft = Vector3.new(-2898.492, 15.887, -5235.022),
+			topRight = Vector3.new(3003.559, 15.887, -5235.022),
+			bottomLeft = Vector3.new(-2898.484, 16.062, 3514.802),
+			bottomRight = Vector3.new(3003.488, 16.159, 3514.865)
 		},
 		chunkSize = 800,
 		gridSpacing = 700,
@@ -448,7 +447,6 @@ local function calculateMapBounds()
 
 	if #positions == 0 then return nil end
 
-	-- Statistical filtering: trim outliers
 	local function trimOutliers(coords)
 		table.sort(coords)
 		local n = #coords
@@ -467,7 +465,6 @@ local function calculateMapBounds()
 		return lowerBound, upperBound
 	end
 
-	-- Extract X, Y, Z separately
 	local xCoords, yCoords, zCoords = {}, {}, {}
 	for _, pos in ipairs(positions) do
 		table.insert(xCoords, pos.X)
@@ -475,7 +472,6 @@ local function calculateMapBounds()
 		table.insert(zCoords, pos.Z)
 	end
 
-	-- Trim each axis
 	local minX, maxX = trimOutliers(xCoords)
 	local minY, maxY = trimOutliers(yCoords)
 	local minZ, maxZ = trimOutliers(zCoords)
@@ -1393,7 +1389,7 @@ strategyBtn.MouseButton1Click:Connect(function()
 end)
 
 flyMethodBtn.MouseButton1Click:Connect(function()
-    if running or GAME_ID == JAILBREAK_ID then return end
+    if running or GAME_ID == 606849621 then return end
 
 	if currentFlyMethod == FlyMethods.CFLY then
 		currentFlyMethod = FlyMethods.SFLY
@@ -1405,7 +1401,7 @@ flyMethodBtn.MouseButton1Click:Connect(function()
 end)
 
 moveMethodBtn.MouseButton1Click:Connect(function()
-	if running or GAME_ID == JAILBREAK_ID then return end
+	if running or GAME_ID == 606849621 then return end
 
 	if currentMoveMethod == MoveMethods.TPPOS then
 		currentMoveMethod = MoveMethods.TWEENTPPOS
