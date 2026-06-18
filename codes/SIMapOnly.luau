@@ -2111,6 +2111,9 @@ do
 			end,
 		}
 		for i, fetcher in APIDUMP_FETCHERS do
+			if i == 2 then
+				continue
+			end
 			local o, r = pcall(fetcher)
 			if o and r then
 				API_Dump = r
