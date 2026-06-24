@@ -83,10 +83,10 @@ task.spawn(function()
 end)
 
 local function throttleEffect(obj)
-	if obj:IsA("ParticleEmitter") or obj:IsA("Trail") then
-        pcall(function()
-		    obj.Lifetime = NumberRange.new(0, 0)
-        end)
+	if obj:IsA("ParticleEmitter") then
+    	obj.Lifetime = NumberRange.new(0, 0)
+	elseif obj:IsA("Trail") then
+	    obj.Lifetime = 0
 	elseif obj:IsA("Beam") then
 		obj.Enabled = false
 	elseif obj:IsA("Fire") or obj:IsA("Smoke") or obj:IsA("Sparkles") then

@@ -28,10 +28,10 @@ local function RunChams()
     local LocalPlayer = Players.LocalPlayer
 
     local TOOL_COLORS = {
-        Gun = { fill = Color3.fromRGB(0, 0, 255), outline = Color3.fromRGB(0, 0, 128) },
-        Knife = { fill = Color3.fromRGB(255, 0, 0), outline = Color3.fromRGB(128, 0, 0) },
+        Gun = { fill = Color3.fromRGB(0, 0, 255), outline = Color3.fromRGB(0, 0, 255) },
+        Knife = { fill = Color3.fromRGB(255, 0, 0), outline = Color3.fromRGB(255, 0, 0) },
     }
-    local DEFAULT_COLORS = { fill = Color3.fromRGB(0, 255, 0), outline = Color3.fromRGB(0, 128, 0) }
+    local DEFAULT_COLORS = { fill = Color3.fromRGB(0, 255, 0), outline = Color3.fromRGB(0, 255, 0) }
 
     do
         local CHAM_TAG = "__ChamSystem"
@@ -110,6 +110,25 @@ local function RunChams()
     local masterConnections = {}
     local playerToolCount = {}
 
+    local function processGunDrop(obj)
+        if obj.Name ~= "GunDrop" then
+            return
+        end
+
+        if obj:FindFirstChildOfClass("Highlight") then
+            return
+        end
+
+        local h = Instance.new("Highlight")
+        h.FillColor = Color3.fromRGB(255,255,0)
+        h.OutlineColor = Color3.fromRGB(255,255,0)
+        h.FillTransparency = 0.75
+        h.OutlineTransparency = 0
+        h.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
+        h.Adornee = obj
+        h.Parent = obj
+    end
+
     local function cleanupPlayer(player)
         if playerConnections[player] then
             for _, c in ipairs(playerConnections[player]) do
@@ -128,9 +147,11 @@ local function RunChams()
         for player in pairs(playerConnections) do
             cleanupPlayer(player)
         end
+
         for _, c in ipairs(masterConnections) do
             if c and c.Connected then c:Disconnect() end
         end
+
         masterConnections = {}
         playerConnections = {}
         playerToolCount = {}
@@ -208,6 +229,15 @@ local function RunChams()
             task.spawn(onCharacterAdded, player.Character)
         end
     end
+
+    for _, obj in ipairs(workspace:GetDescendants()) do
+        processGunDrop(obj)
+    end
+
+    table.insert(
+        masterConnections,
+        workspace.DescendantAdded:Connect(processGunDrop)
+    )
 
     local killSignal = RunService:FindFirstChild("__ChamSystem")
     if killSignal then

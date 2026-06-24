@@ -5,8 +5,9 @@ local UIS = game:GetService("UserInputService")
 local Player = Players.LocalPlayer
 local Camera = workspace.CurrentCamera
 
-local THIRD_DISTANCE = 10
-local THIRD_HEIGHT = 2
+local THIRD_DISTANCE = 7
+local THIRD_HEIGHT = 0.75
+local THIRD_SHOULDER_OFFSET = 1.75
 
 local SECOND_DISTANCE = 8
 local SECOND_HEIGHT = 2
@@ -180,14 +181,15 @@ RunService:BindToRenderStep(
             local t = tick()
 
             local swayX =
-                math.sin(t * 5) * 0.75 * move
+                math.sin(t * 5) * 0.15 * move
 
             local swayY =
-                math.cos(t * 9) * 0.325 * move
+                math.cos(t * 9) * 0.2 * move
 
             local camPos =
                 Head.Position
                 - (look * THIRD_DISTANCE)
+                + (Camera.CFrame.RightVector * THIRD_SHOULDER_OFFSET)
                 + Vector3.new(
                     swayX,
                     THIRD_HEIGHT + swayY,
@@ -216,11 +218,12 @@ RunService:BindToRenderStep(
                     + hit.Normal * 0.35
             end
 
+            local originalRotation =
+                Camera.CFrame.Rotation
+
             Camera.CFrame =
-                CFrame.new(
-                    camPos,
-                    Head.Position
-                )
+                CFrame.new(camPos)
+                * originalRotation
 
         elseif Mode == 3 then
 
