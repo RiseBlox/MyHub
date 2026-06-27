@@ -901,6 +901,14 @@ XML_Descriptors = {
 			.. "</Ref>" -- TODO Not sure, run tests
 	end,
 	ContentId = function(raw)
+		-- On newer clients, Content-typed props (Image, Texture, SoundId, MeshContent, ...) may read as
+		-- a Content userdata instead of a string. Extract its URI so they still serialize.
+		if type(raw) ~= "string" then
+			local ok, uri = pcall(function()
+				return (raw.SourceType == Enum.ContentSourceType.Uri) and raw.Uri or ""
+			end)
+			raw = (ok and uri) or ""
+		end
 		return raw == "" and "<null></null>" or "<url>" .. XML_Descriptors.string(raw) .. "</url>", "Content" -- TODO Remove "Content" str once Roblox fully releases Content DataType
 	end,
 	CoordinateFrame = function(raw)
@@ -1482,14 +1490,15 @@ do
 		local ok, err = pcall(function()
 			local CLIENT_VERSION_str = tostring(CLIENT_VERSION)
 			local ok, result = pcall(readfile, CLIENT_VERSION_str)
-			if
-				ok
-				and result
-				and result ~= ""
-				and pcall(service.HttpService.JSONDecode, service.HttpService, result)
-			then
-				API_Dump = result
-				return
+			-- A real API dump is megabytes and decodes to a big array of classes. The old check only
+			-- verified "decodes as JSON", so a truncated/garbage cache (e.g. a stray 7-byte "4102507")
+			-- passed and was used as the dump — silently breaking every save. Require real substance.
+			if ok and result and #result > 50000 then
+				local decOk, decoded = pcall(service.HttpService.JSONDecode, service.HttpService, result)
+				if decOk and type(decoded) == "table" and #decoded > 100 then
+					API_Dump = result
+					return
+				end
 			end
 
 			local matching_versions, is_matched = {}
@@ -1536,16 +1545,30 @@ do
 		end)
 
 		if not ok or not API_Dump then
-			-- ? Version-specific dump unavailable (common on some executors / CDN); silently fall back to the latest dump below.
-			-- ? A genuine total failure is still reported by "Failed to load the API Dump" further down.
-			API_Dump = service.HttpService:JSONEncode(
-				service.HttpService:JSONDecode(
-					game:HttpGet(
-						"https://raw.githubusercontent.com/MaximumADHD/Roblox-Client-Tracker/roblox/Mini-API-Dump.json",
-						true
-					)
-				).Classes
-			)
+			-- ? Version-specific dump unavailable (common on some executors / CDN). Fall back to the LATEST
+			-- ? OFFICIAL Full-API-Dump from Roblox's own CDN.
+			-- ? CRITICAL: do NOT fall back to MaximumADHD's GitHub dump here — it STRIPS the Hidden/
+			-- ? NotScriptable serialized members (Color3uint8, size, ...), so every BasePart loses its Color
+			-- ? and Size and loads grey & default-sized in Studio. The official CDN dump keeps them.
+			local fb_ok = pcall(function()
+				local ver = (game:HttpGet("https://setup.rbxcdn.com/versionQTStudio", true)):gsub("%s+", "")
+				API_Dump = service.HttpService:JSONEncode(
+					service.HttpService:JSONDecode(
+						game:HttpGet("https://setup.rbxcdn.com/" .. ver .. "-Full-API-Dump.json", true)
+					).Classes
+				)
+			end)
+			if not fb_ok or not API_Dump then
+				-- ? Last resort only (parts may lose Color/Size): MaximumADHD's trimmed dump.
+				API_Dump = service.HttpService:JSONEncode(
+					service.HttpService:JSONDecode(
+						game:HttpGet(
+							"https://raw.githubusercontent.com/MaximumADHD/Roblox-Client-Tracker/roblox/Mini-API-Dump.json",
+							true
+						)
+					).Classes
+				)
+			end
 		end
 
 		local classList = {}
@@ -1595,9 +1618,9 @@ do
 							local ValueType = Member.ValueType
 							local ValueType_Name = ValueType.Name
 
-							if 645 <= CLIENT_VERSION and ValueType_Name == "Content" then -- TODO: Remove after Roblox adds a descriptor for it
-								continue
-							end
+							-- (Content-typed props such as Image/Texture/SoundId/MeshContent are serialized via the
+							-- ContentId descriptor, which now handles both string and Content-userdata values. The old
+							-- blanket skip here dropped every one of them on modern clients, blanking decals/images.)
 
 							local Special, PreferredDescriptorName
 
@@ -1745,6 +1768,7 @@ local GLOBAL_ENV = getgenv and getgenv() or _G or shared
 --- @field StreamingChunkWait number -- * Max seconds to wait for one chunk to finish loading. The sweep waits until a region stops gaining parts (stability detection), capped here — dense regions load fully, empty ones return fast. ___Default:___ 12
 --- @field StreamingSettleTime number -- * Seconds to wait after the streaming sweep for in-flight background terrain/loads to finish before saving. Also caps the post-sweep terrain-stabilization poll (waits until SmoothGrid stops growing) so terrain fills in instead of leaving floating islands. ___Default:___ 5
 --- @field NeutralizeLighting boolean -- * Reset `Lighting` (ClockTime/Fog/Ambient), `Atmosphere`, post-effects (ColorCorrection/Bloom/Blur/SunRays/DoF) and clouds to clean midday right before saving, so the place opens BRIGHT instead of inheriting the game's dark/foggy/night atmosphere (the "all grey on the camera" look). `false` keeps the game's real lighting. ___Default:___ false
+--- @field ExportObj boolean -- * Also write a world-space `.obj` of all MeshPart geometry next to the save. Geometry is recovered with `AssetService:CreateEditableMeshAsync`, which works even for PRIVATE game meshes that Studio can't re-download (those save as grey boxes). The `.obj` (with per-part vertex colors) opens in Blender or Studio's 3D importer. MeshParts can't be made to render inside the place file itself, so this is the only way to recover their visuals. Best paired with `SetStreaming` (load the whole map first). World-space baking duplicates reused meshes, so big maps produce large files. ___Default:___ false
 --- @field Debug boolean -- * Writes a detailed run log to `saveinstance-debug.txt` in the executor workspace (executor, capabilities, options, streaming/prepass/decompile stats, save result). Share it for diagnosis. ___Default:___ false
 --- @field DecompilePrepass boolean -- * **RISKY:** Before saving, decompiles every client script in parallel via an external API (`api.lua.expert`) and pre-fills the decompile cache, so the save's decompile step is near-instant. Big speedup on script-heavy games. Sends script bytecode to a third-party API; needs `getscriptbytecode` + an HTTP request function. ___Default:___ false
 --- @field PrepassConcurrency number -- * Parallel decompile requests kept in flight during the prepass. ___Default:___ 24
@@ -2259,6 +2283,135 @@ local function wait_terrain_loaded(terrainGHP, maxWait)
 	return lastSize
 end
 
+-- ExportObj: bake every MeshPart's geometry into a single world-space .obj (with per-part vertex
+-- colors). The geometry is recovered via AssetService:CreateEditableMeshAsync, which works even for
+-- the PRIVATE game meshes that Studio can't re-download (those render as grey boxes in a normal save).
+-- This is the only way to recover the VISUAL geometry of private MeshParts — they can't go back into
+-- a Studio place (MeshParts have no inline geometry field), but the .obj opens in Blender / Studio's
+-- 3D importer. NOTE: world-space baking duplicates each reused mesh, so big maps make big files.
+-- Pair with SetStreaming so the whole map is loaded first. Returns true, stats | false, reason.
+local function export_map_obj(root, objName, report)
+	local AS = service.AssetService or game:GetService("AssetService")
+	local ContentLib = Content
+	if not (AS and AS.CreateEditableMeshAsync and ContentLib and ContentLib.fromUri) then
+		return false, "needs AssetService:CreateEditableMeshAsync + Content.fromUri (not available here)"
+	end
+	if not writefile then
+		return false, "no writefile"
+	end
+
+	local parts = {}
+	for _, d in ipairs(root:GetDescendants()) do
+		if d:IsA("MeshPart") and d.MeshId ~= "" then
+			parts[#parts + 1] = d
+		end
+	end
+	local total = #parts
+	if total == 0 then
+		return false, "no MeshParts to export"
+	end
+
+	-- Unique-mesh geometry cache: each mesh's vertices/triangles read once, reused for every instance.
+	local geoCache = {}
+	local function getGeo(meshId)
+		local cached = geoCache[meshId]
+		if cached ~= nil then
+			return cached
+		end
+		local ok, em = pcall(function()
+			return AS:CreateEditableMeshAsync(ContentLib.fromUri(meshId))
+		end)
+		if not ok or not em then
+			geoCache[meshId] = false
+			return false
+		end
+		local idMap, pos = {}, {}
+		local mn = Vector3.new(1e9, 1e9, 1e9)
+		local mx = -mn
+		for i, vid in ipairs(em:GetVertices()) do
+			idMap[vid] = i
+			local p = em:GetPosition(vid)
+			pos[i] = p
+			mn = Vector3.new(math.min(mn.X, p.X), math.min(mn.Y, p.Y), math.min(mn.Z, p.Z))
+			mx = Vector3.new(math.max(mx.X, p.X), math.max(mx.Y, p.Y), math.max(mx.Z, p.Z))
+		end
+		local tris = {}
+		for _, fid in ipairs(em:GetFaces()) do
+			local fv = em:GetFaceVertices(fid) -- returns a {v1,v2,v3} table, NOT 3 return values
+			if fv[1] and idMap[fv[1]] and idMap[fv[2]] and idMap[fv[3]] then
+				tris[#tris + 1] = { idMap[fv[1]], idMap[fv[2]], idMap[fv[3]] }
+			end
+		end
+		local g = { pos = pos, tris = tris, bbox = (mx - mn), center = (mn + mx) / 2 }
+		geoCache[meshId] = g
+		return g
+	end
+
+	local canAppend = appendfile ~= nil
+	pcall(function()
+		if delfile and isfile and isfile(objName) then
+			delfile(objName)
+		end
+	end)
+	writefile(objName, "# Roblox map export by USSI (Robloxscripts.com) -- world-space geometry + per-part vertex colors\n")
+	local buf, vOff, written, skipped, processed = {}, 0, 0, 0, 0
+	local function flush()
+		if #buf == 0 then
+			return
+		end
+		local s = table.concat(buf)
+		if canAppend then
+			appendfile(objName, s)
+		else
+			writefile(objName, ((isfile and isfile(objName)) and readfile(objName) or "") .. s)
+		end
+		buf = {}
+	end
+
+	for _, mp in ipairs(parts) do
+		processed += 1
+		local g = getGeo(mp.MeshId)
+		if g and #g.pos > 0 and #g.tris > 0 then
+			local bb, sz = g.bbox, mp.Size
+			local sx = bb.X > 1e-5 and sz.X / bb.X or 1
+			local sy = bb.Y > 1e-5 and sz.Y / bb.Y or 1
+			local szc = bb.Z > 1e-5 and sz.Z / bb.Z or 1
+			local cf, col = mp.CFrame, mp.Color
+			buf[#buf + 1] = "o " .. ((mp.Name ~= "" and mp.Name) or "MeshPart") .. "_" .. written .. "\n"
+			for _, p in ipairs(g.pos) do
+				local lc = p - g.center
+				local w = cf:PointToWorldSpace(Vector3.new(lc.X * sx, lc.Y * sy, lc.Z * szc))
+				buf[#buf + 1] = string.format("v %.2f %.2f %.2f %.3f %.3f %.3f\n", w.X, w.Y, w.Z, col.R, col.G, col.B)
+			end
+			for _, tr in ipairs(g.tris) do
+				buf[#buf + 1] = string.format("f %d %d %d\n", tr[1] + vOff, tr[2] + vOff, tr[3] + vOff)
+			end
+			vOff += #g.pos
+			written += 1
+		else
+			skipped += 1
+		end
+		if processed % 300 == 0 then
+			flush()
+			if report then
+				report(processed, total)
+			end
+			task.wait() -- yield so a big map doesn't freeze the client
+		end
+	end
+	flush()
+	if report then
+		report(total, total)
+	end
+	local uniq = 0
+	for _, v in pairs(geoCache) do
+		if v then
+			uniq += 1
+		end
+	end
+	return true, { meshParts = total, written = written, skipped = skipped, uniqueMeshes = uniq, verts = vOff }
+end
+
 local function synsaveinstance(CustomOptions, CustomOptions2)
 	if GLOBAL_ENV.USSI then
 		return
@@ -2377,6 +2530,9 @@ local function synsaveinstance(CustomOptions, CustomOptions2)
 
 		-- * NeutralizeLighting: reset Lighting/Atmosphere/post-effects to clean midday so the saved place opens BRIGHT instead of dark/foggy/night (the "all grey on the camera" look). Default false keeps the game's real lighting.
 		NeutralizeLighting = false,
+
+		-- * ExportObj: also write a world-space .obj of all MeshPart geometry (recovered via EditableMesh) next to the save, so PRIVATE meshes that show as grey boxes in Studio can be recovered/viewed in Blender. Pair with SetStreaming. Large on big maps.
+		ExportObj = false,
 
 		-- * Decompilation prepass: parallel-decompile all client scripts via an external API before saving (big speedup on script-heavy games). RISKY: sends script bytecode to a third-party API.
 		DecompilePrepass = false,
@@ -4122,6 +4278,35 @@ local function synsaveinstance(CustomOptions, CustomOptions2)
 				end
 			end)
 			if ProgressFill then -- reset the bar for the save phase
+				ProgressFill.Size = UDim2.new(0, 0, 1, 0)
+			end
+		end
+
+		if OPTIONS.ExportObj then
+			local objName = (placename or ("place " .. game.PlaceId .. ".rbxlx")):gsub("%.rbxl?x$", ".obj"):gsub("%.rbxmx$", ".obj")
+			print("[saveinstance] ExportObj: baking MeshPart geometry to '" .. objName .. "' (recovers private meshes Studio can't load; file can be large on big maps)...")
+			if StatusText then
+				StatusText.Text = "Exporting map geometry to .obj..."
+			end
+			local okObj, info = export_map_obj(ToSaveInstance or workspace, objName, function(done, tot)
+				if StatusText then
+					StatusText.Text = string.format("Exporting .obj: %d / %d meshparts", done, tot)
+				end
+				if ProgressFill and tot > 0 then
+					ProgressFill.Size = UDim2.new(done / tot, 0, 1, 0)
+				end
+			end)
+			if okObj then
+				print(string.format(
+					"[saveinstance] ExportObj done: %d/%d meshparts baked (%d unique meshes, %d verts) -> %s",
+					info.written, info.meshParts, info.uniqueMeshes, info.verts, objName
+				))
+				dbg("[obj] written:", info.written, "skipped:", info.skipped, "unique:", info.uniqueMeshes, "verts:", info.verts)
+			else
+				print("[saveinstance] ExportObj skipped: " .. tostring(info))
+				dbg("[obj] skipped:", tostring(info))
+			end
+			if ProgressFill then
 				ProgressFill.Size = UDim2.new(0, 0, 1, 0)
 			end
 		end
