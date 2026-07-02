@@ -1095,9 +1095,6 @@ frame.BorderSizePixel = 0
 frame.Active = true
 frame.Draggable = true
 
-local uiCorner = Instance.new("UICorner", frame)
-uiCorner.CornerRadius = UDim.new(0, 0)
-
 local stroke = Instance.new("UIStroke", frame)
 stroke.Thickness = 1
 stroke.Color = Color3.new(32, 32, 32)
@@ -1112,9 +1109,6 @@ title.TextSize = 18
 title.TextColor3 = Color3.new(1, 1, 1)
 title.TextXAlignment = Enum.TextXAlignment.Center
 title.BorderSizePixel = 0
-
-local titleCorner = Instance.new("UICorner", title)
-titleCorner.CornerRadius = UDim.new(0, 0)
 
 local close = Instance.new("TextButton", frame)
 close.Size = UDim2.new(0, 36, 0, 36)
@@ -1148,16 +1142,10 @@ barBg.Position = UDim2.new(0.03, 0, 0, 14)
 barBg.BackgroundColor3 = Color3.fromHex("#1d2f49")
 barBg.BorderSizePixel = 0
 
-local barCorner = Instance.new("UICorner", barBg)
-barCorner.CornerRadius = UDim.new(0, 0)
-
 progressFill = Instance.new("Frame", barBg)
 progressFill.Size = UDim2.new(0, 0, 1, 0)
 progressFill.BackgroundColor3 = Color3.fromHex("#e6b32f")
 progressFill.BorderSizePixel = 0
-
-local fillCorner = Instance.new("UICorner", progressFill)
-fillCorner.CornerRadius = UDim.new(0, 0)
 
 progressText = Instance.new("TextLabel", barBg)
 progressText.Size = UDim2.new(1, 0, 1, 0)
@@ -1179,9 +1167,6 @@ strategyBtn.TextColor3 = Color3.new(1, 1, 1)
 strategyBtn.BorderSizePixel = 0
 strategyBtn.AutoButtonColor = false
 
-local stratCorner = Instance.new("UICorner", strategyBtn)
-stratCorner.CornerRadius = UDim.new(0, 0)
-
 flyMethodBtn = Instance.new("TextButton", content)
 flyMethodBtn.Size = UDim2.new(0.4645, 0, 0, 28)
 flyMethodBtn.Position = UDim2.new(0.03, 0, 0, 74)
@@ -1192,9 +1177,6 @@ flyMethodBtn.BackgroundColor3 = Color3.fromHex("#23456d")
 flyMethodBtn.TextColor3 = Color3.new(1, 1, 1)
 flyMethodBtn.BorderSizePixel = 0
 flyMethodBtn.AutoButtonColor = false
-
-local flyCorner = Instance.new("UICorner", flyMethodBtn)
-flyCorner.CornerRadius = UDim.new(0, 0)
 
 moveMethodBtn = Instance.new("TextButton", content)
 moveMethodBtn.Size = UDim2.new(0.4645, 0, 0, 28)
@@ -1207,9 +1189,6 @@ moveMethodBtn.TextColor3 = Color3.new(1, 1, 1)
 moveMethodBtn.BorderSizePixel = 0
 moveMethodBtn.AutoButtonColor = false
 
-local moveCorner = Instance.new("UICorner", moveMethodBtn)
-moveCorner.CornerRadius = UDim.new(0, 0)
-
 actionBtn = Instance.new("TextButton", content)
 actionBtn.Size = UDim2.new(0.94, 0, 0, 32)
 actionBtn.Position = UDim2.new(0.03, 0, 0, 106)
@@ -1220,9 +1199,6 @@ actionBtn.BackgroundColor3 = Color3.fromHex("#57993d")
 actionBtn.TextColor3 = Color3.new(1, 1, 1)
 actionBtn.BorderSizePixel = 0
 actionBtn.AutoButtonColor = false
-
-local actionCorner = Instance.new("UICorner", actionBtn)
-actionCorner.CornerRadius = UDim.new(0, 0)
 
 local BTN_ACTION_DEFAULT = Color3.fromHex("#57993d")
 local BTN_ACTION_HOVER   = Color3.fromHex("#5cb337")
