@@ -18,8 +18,8 @@ local PrepassOptions = {
     Verbose           = true,
     SkipPrepass       = false,
     SkipSaveInstance  = false,
-    UssiRepoURL       = "https://raw.githubusercontent.com/RiseBlox/UltraSmartSaveInstance/main/",
-    UssiScript        = "saveinstance",
+    UssiRepoURL       = "https://raw.githubusercontent.com/RiseBlox/MyHub/main/codes/",
+    UssiScript        = "SISmart",
 }
 
 ussiprepass(Options, PrepassOptions)

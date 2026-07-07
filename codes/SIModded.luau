@@ -1774,6 +1774,7 @@ local GLOBAL_ENV = getgenv and getgenv() or _G or shared
 --- @field PrepassConcurrency number -- * Parallel decompile requests kept in flight during the prepass. ___Default:___ 24
 --- @field PrepassRateGap number -- * Minimum seconds between decompile-API requests (lua.expert rejects unthrottled bursts). Lower = faster if the API allows. ___Default:___ 0.12
 --- @field PrepassApiUrl string -- * Endpoint used by the decompile prepass. ___Default:___ "https://api.lua.expert/decompile"
+--- @field PrepassMaxScripts number -- * Upper bound for `DecompilePrepass`. If the game has more than this many client scripts, the prepass is skipped and scripts decompile on-demand during the save instead. The gather is cheap, the workers are throttled (reading thousands of scripts' bytecode no longer bursts/crashes), and decompiles are API-rate-limited, so this just avoids an absurdly long prepass on games so large the prepass would risk destabilizing an already memory-heavy client (e.g. Grow a Garden 2 with 25k+ scripts); those fall back to the stable on-demand decompile. ___Default:___ 6000
 
 --- @interface OptionsAliases
 --- @within SynSaveInstance
@@ -1792,7 +1793,7 @@ local GLOBAL_ENV = getgenv and getgenv() or _G or shared
 	Saves instances with specified options. Example:
 	```lua
 	local Params = {
-		RepoURL = "https://raw.githubusercontent.com/luau/SynSaveInstance/main/",
+		RepoURL = "https://raw.githubusercontent.com/RealSlimShady2000/SaveInstance420Edition/main/",
 		SSI = "saveinstance",
 	}
 
@@ -2081,7 +2082,11 @@ local function RunDecompilePrepass(ldeccache, O, report)
 	local rateGap = tonumber(O.PrepassRateGap) or 0.12
 
 	-- Gather unique client scripts (skip server scripts we can't read; dedupe by bytecode hash)
-	local seen, jobs = {}, {}
+	-- Safety cap: pre-decompiling every script in a HUGE game (e.g. Grow a Garden 2) OOM-crashes the
+	-- client. If there are more than this many unique scripts, skip the prepass and let them decompile
+	-- on-demand during the save (incremental, far lighter). Raise PrepassMaxScripts to override.
+	local maxScripts = math.max(0, tonumber(O.PrepassMaxScripts) or 2500)
+	local seen, jobs, overCap = {}, {}, false
 	local function consider(o)
 		local okIsA, isLSC = pcall(function()
 			return o:IsA("LuaSourceContainer")
@@ -2095,12 +2100,18 @@ local function RunDecompilePrepass(ldeccache, O, report)
 				return -- server scripts cannot be decompiled client-side
 			end
 		end
+				-- getscriptbytecode + dedup HERE, serially on the main thread - exactly like the proven
+		-- upstream ussiprepass. We keep only UNIQUE bytecode; running getscriptbytecode serially
+		-- (NOT concurrently in the workers) is what keeps huge games (Grow a Garden 2) stable.
 		local ok, bc = pcall(getscriptbytecode, o)
-		if ok and type(bc) == "string" and bc ~= "" then
+		if ok and type(bc) == "string" and bc ~= "" and not seen[bc] then
+			seen[bc] = true
 			local key = sha384(bc)
-			if not seen[key] and ldeccache[key] == nil then
-				seen[key] = true
-				jobs[#jobs + 1] = { key = key, bc = bc }
+			if ldeccache[key] == nil then
+				jobs[#jobs + 1] = { bc = bc, key = key }
+				if maxScripts > 0 and #jobs > maxScripts then
+					overCap = true
+				end
 			end
 		end
 	end
@@ -2108,23 +2119,36 @@ local function RunDecompilePrepass(ldeccache, O, report)
 	do
 		local scanned = 0
 		for _, o in game:GetDescendants() do
+			if overCap then
+				break
+			end
 			pcall(consider, o)
 			scanned += 1
-			if scanned % 1000 == 0 then
+			if scanned % 500 == 0 then
 				task.wait() -- yield; getscriptbytecode per script is heavy on big games
 			end
 		end
 	end
-	if getloadedmodules then
+	if not overCap and getloadedmodules then
 		local ok, mods = pcall(getloadedmodules)
 		if ok and type(mods) == "table" then
 			for _, m in mods do
+				if overCap then
+					break
+				end
 				pcall(consider, m)
 			end
 		end
 	end
 
 	local total = #jobs
+	if overCap then
+		print(string.format(
+			"[saveinstance] Prepass SKIPPED — this game has more than %d unique client scripts; pre-decompiling that many via the rate-limited API would take too long. Scripts will still decompile on-demand during the save. Raise PrepassMaxScripts to force it, or use noscripts = true for a structure-only save.",
+			maxScripts
+		))
+		return false, "too many scripts (> " .. maxScripts .. "); using on-demand decompile instead"
+	end
 	print("[saveinstance] Prepass: gathered " .. total .. " unique client scripts to decompile")
 	if total == 0 then
 		return true
@@ -2143,9 +2167,10 @@ local function RunDecompilePrepass(ldeccache, O, report)
 					if not job then
 						return
 					end
+					-- Workers ONLY do the HTTP decompile (getscriptbytecode + dedup already happened serially
+					-- in the gather). No concurrent getscriptbytecode = stable on huge games.
 					local body = decompile_via_api(job.bc, apiUrl, rateGap)
 					if body and body ~= "" then
-						-- strip null bytes like the normal decompile path does (they break the XML file)
 						ldeccache[job.key] = (string.gsub(body, "\0", "\\0"))
 					end
 					done += 1
@@ -2412,6 +2437,14 @@ local function export_map_obj(root, objName, report)
 	return true, { meshParts = total, written = written, skipped = skipped, uniqueMeshes = uniq, verts = vOff }
 end
 
+local function fmt_eta(sec)
+	sec = math.max(0, math.ceil(sec))
+	if sec >= 60 then
+		return string.format("%dm %ds", math.floor(sec / 60), sec % 60)
+	end
+	return sec .. "s"
+end
+
 local function synsaveinstance(CustomOptions, CustomOptions2)
 	if GLOBAL_ENV.USSI then
 		return
@@ -2539,6 +2572,7 @@ local function synsaveinstance(CustomOptions, CustomOptions2)
 		PrepassConcurrency = 24, -- parallel decompile requests kept in flight
 		PrepassRateGap = 0.12, -- min seconds between API requests (lua.expert rejects unthrottled bursts). Lower = faster if the API allows.
 		PrepassApiUrl = "https://api.lua.expert/decompile",
+		PrepassMaxScripts = 6000, -- upper safety bound: only skip the prepass on truly enormous games (the gather is now cheap and decompiles are rate-limited, so this guards against an absurdly long run, not a crash). On-demand decompile takes over if exceeded.
 
 		OptionsAliases = { -- You can't really modify these as a user
 			Streaming = "SetStreaming",
@@ -3040,8 +3074,6 @@ local function synsaveinstance(CustomOptions, CustomOptions2)
 		end
 	end
 
-	local used_lua_expert = false -- set true when lua.expert (external API) is the active decompiler; credits it in script headers
-
 	do
 		local Decompiler = decompile --OPTIONS.decomptype == "custom" and custom_decompiler or decompile or custom_decompiler
 
@@ -3122,7 +3154,6 @@ local function synsaveinstance(CustomOptions, CustomOptions2)
 			-- the coroutine-timeout `getbytecode` wrapper — that wrapper returned failure in the save
 			-- context on Volt, so the API was never reached.
 			local canApi = (request or http_request) and base64encode and getscriptbytecode and true or false
-			used_lua_expert = canApi
 			print(string.format(
 				"[saveinstance] lua.expert decompiler setup: canApi=%s (request=%s base64encode=%s getscriptbytecode=%s)",
 				tostring(canApi),
@@ -3325,6 +3356,7 @@ local function synsaveinstance(CustomOptions, CustomOptions2)
 	end
 
 	local CHUNK_LIMIT = 200 * 1024 * 1024 -- string length overflow prevention
+	local last_save_yield = 0
 	local function save_cache(final)
 		local savestr = table.concat(savebuffer)
 		currentparts[#currentparts + 1] = savestr -- * O(1) append; the chunk string is built once at the boundary below (was `currentstr ..= savestr`, which rebuilt the whole string each call -> O(n^2) + "not enough memory")
@@ -3344,15 +3376,20 @@ local function synsaveinstance(CustomOptions, CustomOptions2)
 			currentsize = 0
 		end
 
-		if StatusText then
-			StatusText.Text = "Saving instances: " .. saved_count .. " (" .. get_size_format() .. ")"
-			if ProgressFill and total_count > 0 then
-				ProgressFill.Size = UDim2.new(math.clamp(saved_count / total_count, 0, 0.99), 0, 1, 0)
+		local now = os.clock()
+		-- Yield to keep the client responsive, but time-gated: this used to wait a FULL render
+		-- frame on EVERY ~55KB flush (thousands of frames on a big save = the main slowdown).
+		-- Now we yield + refresh the UI only ~every 30ms of work, independent of flush count.
+		if now - last_save_yield > 0.03 then
+			last_save_yield = now
+			if StatusText then
+				StatusText.Text = "Saving instances: " .. saved_count .. " (" .. get_size_format() .. ")"
+				if ProgressFill and total_count > 0 then
+					ProgressFill.Size = UDim2.new(math.clamp(saved_count / total_count, 0, 0.99), 0, 1, 0)
+				end
 			end
+			wait_for_render()
 		end
-		-- ? Needed for at least 1fps (status text)
-		-- task.wait()
-		wait_for_render()
 	end
 
 	local function save_specific(className, properties)
@@ -3688,7 +3725,6 @@ local function synsaveinstance(CustomOptions, CustomOptions2)
 										end
 
 										value = ""
-											.. (used_lua_expert and "-- DECOMPILED USING LUA.EXPERT FREE DECOMPILER — Join: https://discord.com/invite/y63m4zUYa4\n" or "")
 											.. "\n"
 											.. (hasLinkedSource and "-- Original Source: https://assetdelivery.roblox.com/v1/asset/?" .. (LinkedSource_type or "id") .. "=" .. (LinkedSource or LinkedSource_Url) .. "\n\n" or "")
 											.. value
@@ -4236,7 +4272,7 @@ local function synsaveinstance(CustomOptions, CustomOptions2)
 						"Streaming map: %d / %d chunks%s",
 						streamed,
 						totalChunks,
-						eta and string.format(" (~%ds left)", math.ceil(eta)) or ""
+						eta and (" (~" .. fmt_eta(eta) .. " left)") or ""
 					)
 				end
 				if ProgressFill and totalChunks > 0 then
@@ -4322,7 +4358,7 @@ local function synsaveinstance(CustomOptions, CustomOptions2)
 						"Decompile prepass: %d / %d scripts%s",
 						decompiled,
 						totalScripts,
-						eta and string.format(" (~%ds left)", math.ceil(eta)) or ""
+						eta and (" (~" .. fmt_eta(eta) .. " left)") or ""
 					)
 				end
 				if ProgressFill and totalScripts > 0 then

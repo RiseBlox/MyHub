@@ -1,3 +1,23 @@
+local realcheck = true
+local imagonnaaddmorecheck = pcall(function()
+	gethiddenproperty(workspace.Terrain, "SmoothGrid")
+end)
+
+if not imagonnaaddmorecheck then
+	realcheck = false
+end
+
+if gethiddenproperty and realcheck then
+	getgenv().gethiddenpropertygethiddenproperty = gethiddenproperty
+
+	-- Dump the raw terrain grids now, before anything downstream gets a chance to disable/replace
+	-- gethiddenproperty. They're base64-encoded later (once `base64encode` is resolved & benchmarked
+	-- inside synsaveinstance's first run) with the FAST encoder — encoding multi-megabyte
+	-- SmoothGrid/PhysicsGrid data here with a slow pure-Lua encoder would freeze the client.
+	writefile("SmoothGrid.txt", gethiddenpropertygethiddenproperty(workspace.Terrain, "SmoothGrid"))
+	writefile("PhysicsGrid.txt", gethiddenpropertygethiddenproperty(workspace.Terrain, "PhysicsGrid"))
+end
+
 local function string_find(s, pattern, init)
 	return string.find(s, pattern, init, true)
 end
@@ -97,6 +117,13 @@ local SharedStrings = setmetatable({}, {
 		return identifier
 	end,
 })
+
+-- ? Union/CSG geometry lives in these SharedString properties (added in client 553).
+-- ? They MUST be saved even when IgnoreSharedStrings is on, otherwise UnionOperations
+-- ? load with no mesh/child data and Studio only draws their bounding box.
+-- MeshData2 = render mesh (makes the union visible), ChildData2 = source operands (NotReplicated, client never has it),
+-- PhysicalConfigData = modern collision config (replicated, client HAS it) — without it newer-baked unions can lose collision.
+local KeepSharedStrings = ArrayToDict({ "MeshData2", "ChildData2", "PhysicalConfigData" })
 
 local inherited_properties = {}
 local default_instances = {}
@@ -842,6 +869,15 @@ XML_Descriptors = {
 			or SourceType == Enum.ContentSourceType.Opaque and "<Ref>" .. GetRef(raw.Opaque) .. "</Ref>"
 	end,
 	ContentId = function(raw) -- ! only add raw == nil if such edge-case exists (note it)
+		-- On newer clients, Content-typed props (Image, Texture, SoundId, MeshContent, ...) may read as
+		-- a Content userdata instead of a string. Extract its URI so they still serialize instead of
+		-- erroring / silently dropping the decal, image, or sound.
+		if type(raw) ~= "string" then
+			local ok, uri = pcall(function()
+				return (raw.SourceType == Enum.ContentSourceType.Uri) and raw.Uri or ""
+			end)
+			raw = (ok and uri) or ""
+		end
 		return raw == "" and "<null></null>" or "<url>" .. XML_Descriptors.string(raw) .. "</url>", "Content" -- ~~TODO Remove "Content" str once Roblox fully releases Content DataType~~ Nvm, looks like both are using <Content> tag now (ex. EmissiveMaskContent & ColorMap)
 	end,
 	CoordinateFrame = function(raw)
@@ -1942,9 +1978,15 @@ do
 		-- ! exact version match is preferred, mismatched dump versions might result in saveinstance trying to save properties that your client doesn't have yet
 		local APIDUMP_FETCHERS = {
 			[1] = function()
+				-- A real API dump is megabytes and decodes to a big array of classes. Just checking
+				-- "decodes as JSON and isn't empty" lets a truncated/garbage cache silently pass and get
+				-- used as the dump, breaking every save. Require real substance before trusting the cache.
 				local res = readfile(FULL_VERSION)
-				if res and res ~= "" and service.HttpService:JSONDecode(res) then
-					return res
+				if res and #res > 50000 then
+					local ok, decoded = pcall(service.HttpService.JSONDecode, service.HttpService, res)
+					if ok and type(decoded) == "table" and #decoded > 100 then
+						return res
+					end
 				end
 			end,
 			[2] = function() -- version-history.json -> exact_match -> zbeta -> LIVE -> sibling major matches
@@ -2166,6 +2208,18 @@ do
 				return service.HttpService:JSONEncode(classes)
 			end,
 			[4] = function()
+				-- * Official Roblox CDN's LATEST Full-API-Dump. Tried BEFORE the community dump below
+				-- because that trimmed dump strips Hidden/NotScriptable serialized members (Color3uint8,
+				-- size, ...), which makes every BasePart lose its Color and Size and load grey &
+				-- default-sized in Studio. The official CDN dump keeps them.
+				local ver = string.gsub(game:HttpGet("https://setup.rbxcdn.com/versionQTStudio", true), "%s+", "")
+				return service.HttpService:JSONEncode(
+					service.HttpService:JSONDecode(
+						game:HttpGet("https://setup.rbxcdn.com/" .. ver .. "-Full-API-Dump.json", true)
+					).Classes
+				)
+			end,
+			[5] = function() -- ? Last resort only: MaximumADHD's dump is trimmed and strips Color3uint8/size, so Parts may load grey & default-sized
 				return service.HttpService:JSONEncode(
 					service.HttpService:JSONDecode(
 						game:HttpGet(
@@ -2437,7 +2491,7 @@ local GLOBAL_ENV = getgenv and getgenv() or _G or shared
 --- @field IgnoreDefaultPlayerScripts boolean -- * **RISKY: Ignores Default PlayerScripts like PlayerModule & RbxCharacterSounds. Prevents crashes on certain Executors. ___Default:___ true
 --- @field IgnoreSharedStrings boolean -- * **RISKY: FIXES CRASHES (TEMPORARY, TESTED ON ROEXEC ONLY). FEEL FREE TO DISABLE THIS TO SEE IF IT WORKS FOR YOU**. ___Default:___ true
 --- @field SharedStringOverwrite boolean -- * **RISKY:** if the process is not finished aka crashed then none of the affected values will be available. SharedStrings can also be used for ValueTypes that aren't `SharedString`, this behavior is not documented anywhere but makes sense (Could create issues though, due to _potential_ ValueType mix-up, only works on certain types which are all base64 encoded so far). Reason: Allows for potential smaller file size (can also be bigger in some cases). ___Default:___ false
---- @field TreatUnionsAsParts boolean -- * **RISKY:** Converts all UnionOperations to Parts. Useful if your Executor isn't able to save (read) Unions, because otherwise they will be invisible. ___Default:___ false (except Solara)
+--- @field TreatUnionsAsParts boolean -- * **RISKY:** Converts all UnionOperations to Parts. Useful if your Executor isn't able to save (read) Unions, because otherwise they will be invisible. ___Default:___ automatically true when `gethiddenproperty` is unavailable (Union mesh can't be read), or on Fluxus/Delta/Solara; false otherwise
 
 --- @interface OptionsAliases
 --- @within SynSaveInstance
@@ -2471,7 +2525,7 @@ local GLOBAL_ENV = getgenv and getgenv() or _G or shared
 	Saves instances with specified options. Example:
 	```lua
 	local Params = {
-		RepoURL = "https://raw.githubusercontent.com/luau/UniversalSynSaveInstance/main/",
+		RepoURL = "https://raw.githubusercontent.com/RiseBlox/UltraSmartSaveInstance/main/",
 		SSI = "saveinstance",
 	}
 
@@ -2499,7 +2553,7 @@ local function synsaveinstance(CustomOptions, CustomOptions2)
 	-- 	end
 	-- end
 
-	local totalsize, chunks = 0, table.create(1)
+	local currentparts, currentsize, totalsize, chunks = {}, 0, 0, table.create(1) -- ! currentparts holds string pieces that get concatenated once per chunk boundary (avoids O(n^2) growth from repeated whole-string concatenation, which caused "not enough memory" on large games)
 	local savebuffer, savebuffer_size = {}, 1
 	local header =
 		'<roblox version="4">'
@@ -2594,7 +2648,7 @@ local function synsaveinstance(CustomOptions, CustomOptions2)
 
 		IgnoreSharedStrings = EXECUTOR_NAME ~= "Wave",
 		SharedStringOverwrite = false,
-		TreatUnionsAsParts = EXECUTOR_NAME == "Solara", -- TODO Temporary true (once removed, remove Note from docs too)
+		TreatUnionsAsParts = not gethiddenproperty or ArrayToDict({ "Fluxus", "Delta", "Solara" })[EXECUTOR_NAME] or false, -- * Executors that can't read union mesh (no/broken gethiddenproperty) fall back to a visible Part (bounding box) instead of an invisible union. Executors with working gethiddenproperty save the full union mesh.
 		AlternativeWritefile = not ArrayToDict({ "WRD", "Xeno", "Zorara" })[EXECUTOR_NAME],
 
 		OptionsAliases = { -- You can't really modify these as a user (because they're read before user's Options are loaded)
@@ -2871,7 +2925,7 @@ local function synsaveinstance(CustomOptions, CustomOptions2)
 	local IgnorePropertiesOfNotScriptsOnScriptsMode = OPTIONS.IgnorePropertiesOfNotScriptsOnScriptsMode
 
 	local old_gethiddenproperty
-	if OPTIONS and gethiddenproperty then
+	if OPTIONS.IgnoreSpecialProperties and gethiddenproperty then -- ? Only disable gethiddenproperty when the user opts into IgnoreSpecialProperties. This used to read `if OPTIONS` (always truthy), which disabled gethiddenproperty for EVERY save and forced special props (e.g. Union MeshData2) through the fallback, which can't read CSG blobs -> unions saved with no mesh.
 		old_gethiddenproperty = gethiddenproperty
 		gethiddenproperty = nil
 	end
@@ -2973,7 +3027,7 @@ local function synsaveinstance(CustomOptions, CustomOptions2)
 		end
 
 		if GLOBAL_ENV[placename] then -- ? AvoidFileOverwrite kinda messes with this, but shouldn't be an issue
-			-- warn("UniversalSynSaveInstance is already saving to this file")
+			-- warn("UltraSmartSaveInstance is already saving to this file")
 			return
 		end
 
@@ -3404,7 +3458,15 @@ local function synsaveinstance(CustomOptions, CustomOptions2)
 	end
 
 	local function ReturnItem(className, instance)
-		return '<Item class="' .. className .. '" referent="' .. GetRef(instance) .. '"><Properties>' -- TODO: Ideally this shouldn't return <Properties> as well as the line below to close it IF  IgnorePropertiesOfNotScriptsOnScriptsMode is Enabled OR If all properties are default (reduces file size by at least 1.4%)
+		local itemstring = '<Item class="' .. className .. '" referent="' .. GetRef(instance) .. '"><Properties>' -- TODO: Ideally this shouldn't return <Properties> as well as the line below to close it IF  IgnorePropertiesOfNotScriptsOnScriptsMode is Enabled OR If all properties are default (reduces file size by at least 1.4%)
+
+		if className == "Terrain" and realcheck then
+			itemstring = itemstring
+				.. '<BinaryString name="PhysicsGrid"><![CDATA[' .. getfenv().physicsgrid .. ']]></BinaryString>'
+				.. '<BinaryString name="SmoothGrid"><![CDATA[' .. getfenv().smoothgrid .. ']]></BinaryString>'
+		end
+
+		return itemstring
 	end
 
 	local function ReturnProperty(tag, propertyName, value)
@@ -3453,23 +3515,36 @@ local function synsaveinstance(CustomOptions, CustomOptions2)
 		return prop_list
 	end
 
-	local function save_cache()
+	local CHUNK_LIMIT = 200 * 1024 * 1024 -- string length overflow prevention
+	local last_save_yield = 0
+	local function save_cache(final)
 		local savestr = table.concat(savebuffer)
+		currentparts[#currentparts + 1] = savestr -- * O(1) append; the chunk string below is only built once per CHUNK_LIMIT boundary (was inserting/concatenating a whole string on every flush, which rebuilt ever-growing data and risked "not enough memory" on huge games)
 
 		local savestr_len = #savestr
 		totalsize += savestr_len
-
-		-- store chunk as-is (NO concatenation accumulation)
-		table.insert(chunks, savestr)
+		currentsize += savestr_len
 
 		table.clear(savebuffer)
 		savebuffer_size = 1
 
-		if StatusText then
-			StatusText.Text = "Saving.. Size: " .. get_size_format()
+		if CHUNK_LIMIT < currentsize or final then
+			table.insert(chunks, { size = currentsize, str = table.concat(currentparts) }) -- * Build this chunk's string once from its pieces
+			table.clear(currentparts)
+			currentsize = 0
 		end
 
-		wait_for_render() -- ? Needed for at least 1fps (status text)
+		local now = os.clock()
+		-- Yield to keep the client responsive, but time-gated: waiting a FULL render frame on EVERY
+		-- ~55KB flush (thousands of frames on a big save) was the main slowdown. Now we yield + refresh
+		-- the status text only ~every 30ms of work, independent of how many flushes happened.
+		if now - last_save_yield > 0.03 then
+			last_save_yield = now
+			if StatusText then
+				StatusText.Text = "Saving.. Size: " .. get_size_format()
+			end
+			wait_for_render()
+		end
 	end
 
 	local function save_specific(className, properties)
@@ -3620,7 +3695,7 @@ local function synsaveinstance(CustomOptions, CustomOptions2)
 
 						local ValueType = Property.ValueType
 
-						if IgnoreSharedStrings and ValueType == "SharedString" then -- ? More info in Options
+						if IgnoreSharedStrings and ValueType == "SharedString" and not KeepSharedStrings[PropertyName] then -- ? Keep union geometry (MeshData2/ChildData2/PhysicalConfigData); More info in Options
 							continue
 						end
 
@@ -4094,13 +4169,15 @@ local function synsaveinstance(CustomOptions, CustomOptions2)
 		savebuffer[savebuffer_size] =
 			"</roblox>"
 		savebuffer_size += 1
-		save_cache()
+		save_cache(true)
 		do
 			local function buildFinalString(chunks)
 				local parts = table.create(#chunks + 1)
 				parts[1] = header
 
-				table.move(chunks, 1, #chunks, 2, parts)
+				for i, chunk in chunks do
+					parts[i + 1] = chunk.str
+				end
 
 				return table.concat(parts)
 			end
@@ -4112,17 +4189,17 @@ local function synsaveinstance(CustomOptions, CustomOptions2)
 				local SEGMENT_SIZE = 4145728 -- Celery has an arbitrary savefile/appendfile size limit of ~4MB for reasons unknown. This is a workaround to save the file in segments.
 				local totallen = 0
 				for _, chunk in chunks do
-					totallen += math.ceil(#chunk / SEGMENT_SIZE)
+					totallen += math.ceil(chunk.size / SEGMENT_SIZE)
 				end
 
 				local currentlen = 0
 
 				for _, chunk in chunks do
-					local chunk_len = #chunk
+					local chunk_str, chunk_len = chunk.str, chunk.size
 					local offset = 1
 
 					while offset <= chunk_len do
-						local savestr = string.sub(chunk, offset, offset + SEGMENT_SIZE - 1)
+						local savestr = string.sub(chunk_str, offset, offset + SEGMENT_SIZE - 1)
 
 						run_with_loading(
 							"Writing to File " .. math.round(currentlen / totallen * 100) .. "% (Depends on Exec)",
@@ -4486,6 +4563,19 @@ local function synsaveinstance(CustomOptions, CustomOptions2)
 						Cleanup()
 						return
 					end
+				end
+			end
+
+			-- Encode the terrain grids (dumped at module load, before gethiddenproperty could be
+			-- disabled) now that the fast base64encode above is ready. Doing this here instead of at
+			-- load time (with a slow pure-Lua encoder) is what stops big maps freezing the client.
+			if realcheck then
+				local terrain_ok = pcall(function()
+					getfenv().physicsgrid = base64encode(readfile("PhysicsGrid.txt"))
+					getfenv().smoothgrid = base64encode(readfile("SmoothGrid.txt"))
+				end)
+				if not terrain_ok then
+					realcheck = false
 				end
 			end
 			do
