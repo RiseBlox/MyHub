@@ -38,7 +38,7 @@ iyRow:Button({
 iyRow:Fill()
 utlTab:Separator({})
 local gptNode = utlTab:TreeNode({
-	Title = "GPT",
+	Title = "LLMs",
 })
 local gptRow1 = gptNode:Row()
 gptRow1:Button({
@@ -101,7 +101,7 @@ utlRow1:Button({
 utlRow1:Fill()
 local utlRow2 = randUtlNode:Row()
 utlRow2:Button({
-	Text = "Btools",
+	Text = "Btools (Client-sided)",
 	Callback = function()
 		local btools = workspace.CurrentCamera:Clone()
 		btools:ClearAllChildren()
@@ -145,10 +145,10 @@ local exploreNode = utlTab:TreeNode({
 })
 local dexRow = exploreNode:Row()
 dexRow:Button({
-	Text = "VexExplorer",
+	Text = "Dex++",
 	Callback = function()
-		loadstring(game:HttpGet("https://raw.githubusercontent.com/Vezise/2026/main/Vez/VexExplorer/VEXExplorer.lua", true))()
-		notify("Successfully loaded!", 2, "Vex Explorer")
+		loadstring(game:HttpGet("https://github.com/AZYsGithub/DexPlusPlus/releases/latest/download/out.lua", true))()
+		notify("Successfully loaded!", 2, "Dex++")
 	end
 })
 dexRow:Button({
@@ -159,10 +159,10 @@ dexRow:Button({
 	end
 })
 dexRow:Button({
-	Text = "Dex++",
+	Text = "VexExplorer",
 	Callback = function()
-		loadstring(game:HttpGet("https://github.com/AZYsGithub/DexPlusPlus/releases/latest/download/out.lua", true))()
-		notify("Successfully loaded!", 2, "Dex++")
+		loadstring(game:HttpGet("https://raw.githubusercontent.com/Vezise/2026/main/Vez/VexExplorer/VEXExplorer.lua", true))()
+		notify("Successfully loaded!", 2, "Vex Explorer")
 	end
 })
 dexRow:Fill()
@@ -171,13 +171,6 @@ local siNode = utlTab:TreeNode({
 	Title = "SaveInstances",
 })
 local ussiRow1 = siNode:Row()
-ussiRow1:Button({
-	Text = "Smart Save",
-	Callback = function()
-		loadstring(game:HttpGet(url .. "MyHub/main/codes/PreSmart.lua", true))()
-		notify("Successfully started!", 2, "Smart Save")
-	end
-})
 ussiRow1:Button({
 	Text = "Modded Save",
 	Callback = function()
@@ -194,6 +187,7 @@ ussiRow2:Button({
 		notify("Successfully started!", 2, "Map Only Save")
 	end
 })
+--[[
 ussiRow2:Button({
 	Text = "Map with Terrain",
 	Callback = function()
@@ -201,6 +195,7 @@ ussiRow2:Button({
 		notify("Successfully started!", 2, "Map with Terrain Save")
 	end
 })
+]]
 ussiRow2:Button({
 	Text = "Terrain Only",
 	Callback = function()
@@ -255,9 +250,8 @@ realRow:Button({
 	end
 })
 realRow:Fill()
-ideTab:Separator({})
 local fakeNode = ideTab:TreeNode({
-	Title = "Fake Functions Tests",
+	Title = "Fake tests (USE AT YOUR OWN DISCRETION)",
 })
 local fakeRow = fakeNode:Row()
 fakeRow:Button({
@@ -485,7 +479,7 @@ local bwNode = othTab:TreeNode({
 })
 local bwRow = bwNode:Row()
 bwRow:Button({
-	Text = "VapeV4 (EOL)",
+	Text = "VapeV4",
 	Callback = function()
 		loadstring(game:HttpGet("https://raw.githubusercontent.com/7GrandDadPGN/VapeV4ForRoblox/main/NewMainScript.lua", true))()
 		notify("Successfully loaded!", 2, "VapeV4")

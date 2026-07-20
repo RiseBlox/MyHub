@@ -42,8 +42,14 @@ if gethiddenproperty and realcheck then
 	-- Dump the raw terrain grids now. They are base64-encoded later (after `base64encode` is set up)
 	-- with the FAST encoder. The pure-Lua to_base64 used to run here and FROZE the client on big maps,
 	-- where SmoothGrid/PhysicsGrid are multiple megabytes.
-	writefile("SmoothGrid.txt", gethiddenpropertygethiddenproperty(workspace.Terrain, "SmoothGrid"))
-	writefile("PhysicsGrid.txt", gethiddenpropertygethiddenproperty(workspace.Terrain, "PhysicsGrid"))
+	local smoothgrid_raw = gethiddenpropertygethiddenproperty(workspace.Terrain, "SmoothGrid")
+	local physicsgrid_raw = gethiddenpropertygethiddenproperty(workspace.Terrain, "PhysicsGrid")
+	if type(smoothgrid_raw) == "string" and type(physicsgrid_raw) == "string" then
+		writefile("SmoothGrid.txt", smoothgrid_raw)
+		writefile("PhysicsGrid.txt", physicsgrid_raw)
+	else
+		realcheck = false -- executor can't actually read terrain grids; skip terrain so writefile(nil) doesn't throw
+	end
 end
 
 local function string_find(s, pattern)
@@ -2073,8 +2079,14 @@ end
 
 local function RunDecompilePrepass(ldeccache, O, report)
 	local HttpRequest = request or http_request
-	if not (getscriptbytecode and HttpRequest and sha384 and base64encode) then
-		return false, "needs getscriptbytecode + request/http_request"
+	-- Prefer the executor's OWN decompiler if it has one (Volt now ships one) - no external API,
+	-- no rate limit, no lua.expert. Fall back to lua.expert only when there is no native decompiler.
+	local nativeDecompile = decompile or (getgenv and getgenv().decompile)
+	if not (getscriptbytecode and sha384) then
+		return false, "needs getscriptbytecode + a hash function"
+	end
+	if not nativeDecompile and not (HttpRequest and base64encode) then
+		return false, "needs a native decompiler, or request/http_request for the lua.expert fallback"
 	end
 
 	local apiUrl = O.PrepassApiUrl or "https://api.lua.expert/decompile"
@@ -2108,7 +2120,7 @@ local function RunDecompilePrepass(ldeccache, O, report)
 			seen[bc] = true
 			local key = sha384(bc)
 			if ldeccache[key] == nil then
-				jobs[#jobs + 1] = { bc = bc, key = key }
+				jobs[#jobs + 1] = { script = o, bc = (nativeDecompile and nil) or bc, key = key }
 				if maxScripts > 0 and #jobs > maxScripts then
 					overCap = true
 				end
@@ -2169,7 +2181,16 @@ local function RunDecompilePrepass(ldeccache, O, report)
 					end
 					-- Workers ONLY do the HTTP decompile (getscriptbytecode + dedup already happened serially
 					-- in the gather). No concurrent getscriptbytecode = stable on huge games.
-					local body = decompile_via_api(job.bc, apiUrl, rateGap)
+					local body
+						if nativeDecompile then
+							-- the executor's own decompiler (Volt etc.) - no external API. Synchronous/CPU-heavy,
+							-- so yield every few scripts so it does not freeze.
+							local okd, r = pcall(nativeDecompile, job.script)
+							if okd and type(r) == "string" then body = r end
+							if nextIndex % 8 == 0 then task.wait() end
+						else
+							body = decompile_via_api(job.bc, apiUrl, rateGap)
+						end
 					if body and body ~= "" then
 						ldeccache[job.key] = (string.gsub(body, "\0", "\\0"))
 					end
@@ -3506,11 +3527,20 @@ local function synsaveinstance(CustomOptions, CustomOptions2)
 							local ClassTags = ClassList[ClassName].Tags
 							if not (ClassTags and ClassTags.NotCreatable) then -- __api_dump_class_not_creatable__ also indicates this
 								-- ! NotCreatableFixes are exceptions to the check above meaning if we don't keep the NotCreatableFixes updated then Instance.new below might start erroring in the future potentially; HOWEVER IsPropertyModified solves this issue and no updates are really needed as NotCreatableFixes is up-to-date as of 664 (which is when IPM was enabled)
-								new_def_inst = Instance.new(ClassName) -- ! Assuming anything that doesn't have NotCreatable is possible to create (therefore no pcall); EXCEPTION NOTED ABOVE
-
-								default_instance = {}
-
-								default_instances[ClassName] = default_instance
+								-- pcall: a stale/incomplete API Dump can list a class as creatable when it actually
+								-- isn't (e.g. AnalyticsService), which would otherwise throw and abort the save.
+								local ok_new
+								ok_new, new_def_inst = pcall(Instance.new, ClassName)
+								if ok_new then
+									default_instance = {}
+									default_instances[ClassName] = default_instance
+								else
+									new_def_inst = nil
+									default_instance = nil
+									if __DEBUG_MODE then
+										__DEBUG_MODE("Unable to create default Instance (pcall failed)", ClassName)
+									end
+								end
 							elseif __DEBUG_MODE then
 								__DEBUG_MODE("Unable to create default Instance", ClassName)
 							end
@@ -3610,7 +3640,7 @@ local function synsaveinstance(CustomOptions, CustomOptions2)
 						local tag, value
 						if Category == "Class" then
 							tag = "Ref"
-							if raw then
+							if typeof(raw) == "Instance" then -- only serialize a Ref if the value is actually an Instance (a weird non-Instance value would otherwise error on raw.ClassName below)
 								if SaveNotCreatableWillBeEnabled then
 									local Fix = NotCreatableFixes[raw.ClassName]
 									if
