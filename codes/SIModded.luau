@@ -3755,7 +3755,6 @@ local function synsaveinstance(CustomOptions, CustomOptions2)
 										end
 
 										value = ""
-											.. "\n"
 											.. (hasLinkedSource and "-- Original Source: https://assetdelivery.roblox.com/v1/asset/?" .. (LinkedSource_type or "id") .. "=" .. (LinkedSource or LinkedSource_Url) .. "\n\n" or "")
 											.. value
 									end

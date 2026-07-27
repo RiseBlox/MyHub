@@ -199,11 +199,8 @@ ussiRow2:Button({
 ussiRow2:Button({
 	Text = "Terrain Only",
 	Callback = function()
-		writefile("SmoothGrid.txt", gethiddenproperty(workspace.Terrain, "SmoothGrid"))
-		notify("Successfully saved SmoothGrid!", 2, "Terrain Only Save")
-		wait(1)
-		writefile("PhysicsGrid.txt", gethiddenproperty(workspace.Terrain, "PhysicsGrid"))
-		notify("Successfully saved PhysicsGrid!", 2, "Terrain Only Save")
+		loadstring(game:HttpGet(url .. "MyHub/main/codes/SITerrainOnly.luau", true))()
+		notify("Successfully started!", 2, "Terrain Only Save")
 	end
 })
 ussiRow2:Fill()
