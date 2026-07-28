@@ -179,6 +179,7 @@ ussiRow1:Button({
 	end
 })
 ussiRow1:Fill()
+siNode:Separator({})
 local ussiRow2 = siNode:Row()
 ussiRow2:Button({
 	Text = "Map Only",
@@ -187,7 +188,7 @@ ussiRow2:Button({
 		notify("Successfully started!", 2, "Map Only Save")
 	end
 })
---[[
+
 ussiRow2:Button({
 	Text = "Map with Terrain",
 	Callback = function()
@@ -195,7 +196,6 @@ ussiRow2:Button({
 		notify("Successfully started!", 2, "Map with Terrain Save")
 	end
 })
-]]
 ussiRow2:Button({
 	Text = "Terrain Only",
 	Callback = function()
