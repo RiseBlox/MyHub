@@ -172,6 +172,13 @@ local siNode = utlTab:TreeNode({
 })
 local ussiRow1 = siNode:Row()
 ussiRow1:Button({
+	Text = "Smart Save",
+	Callback = function()
+		loadstring(game:HttpGet(url .. "MyHub/main/codes/PreSmart.lua", true))()
+		notify("Successfully started!", 2, "Smart Save")
+	end
+})
+ussiRow1:Button({
 	Text = "Modded Save",
 	Callback = function()
 		loadstring(game:HttpGet(url .. "MyHub/main/codes/PreModded.lua", true))()
@@ -188,7 +195,6 @@ ussiRow2:Button({
 		notify("Successfully started!", 2, "Map Only Save")
 	end
 })
-
 ussiRow2:Button({
 	Text = "Map with Terrain",
 	Callback = function()
@@ -200,7 +206,7 @@ ussiRow2:Button({
 	Text = "Terrain Only",
 	Callback = function()
 		loadstring(game:HttpGet(url .. "MyHub/main/codes/SITerrainOnly.luau", true))()
-		notify("Successfully started!", 2, "Terrain Only Save")
+		notify("Successfully saved!", 2, "Terrain Only Save")
 	end
 })
 ussiRow2:Fill()
