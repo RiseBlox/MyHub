@@ -491,8 +491,8 @@ bwRow:Button({
 bwRow:Button({
 	Text = "VapeVoidWare",
 	Callback = function()
-		loadstring(game:HttpGet("https://raw.githubusercontent.com/VapeVoidware/VWRewrite/master/NewMainScript.lua", true))()
-		notify("Successfully loaded!", 2, "VapeVW")
+		loadstring(game:HttpGet("https://files.vapevoidware.xyz/VapeVoidware/VW-Add/main/loader2.lua", true))()
+		notify("Successfully loaded!", 2, "VapeVoidWare")
 	end
 })
 bwRow:Button({
