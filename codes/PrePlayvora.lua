@@ -13,8 +13,6 @@ local Options = {
     IgnoreList = {},
     NilInstances = true,
     SavePlayerGui = true,
-    SetStreaming = false,
-    DecompilePrepass = false,
 }
 
 local PrepassOptions = {
@@ -25,7 +23,7 @@ local PrepassOptions = {
     SkipPrepass       = false,
     SkipSaveInstance  = false,
     UssiRepoURL       = "https://raw.githubusercontent.com/RiseBlox/MyHub/main/codes/",
-    UssiScript        = "SIModded",
+    UssiScript        = "SIPlayvora",
 }
 
 ussiprepass(Options, PrepassOptions)

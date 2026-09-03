@@ -13,6 +13,8 @@ local Options = {
     IgnoreList = {},
     NilInstances = true,
     SavePlayerGui = true,
+    SetStreaming = false,
+    DecompilePrepass = false,
 }
 
 local PrepassOptions = {
@@ -23,7 +25,7 @@ local PrepassOptions = {
     SkipPrepass       = false,
     SkipSaveInstance  = false,
     UssiRepoURL       = "https://raw.githubusercontent.com/RiseBlox/MyHub/main/codes/",
-    UssiScript        = "SIMapWithTerrain",
+    UssiScript        = "SI420",
 }
 
 ussiprepass(Options, PrepassOptions)

@@ -6,24 +6,24 @@ local ImGui = loadstring(game:HttpGet(url .. "Depthso-Roblox-ImGui/main/ImGui.lu
 local Window = ImGui:CreateWindow({
 	Title = "MyHub [REMASTERED]",
 	Size = UDim2.fromOffset(458, 276),
-	Position = UDim2.fromOffset(9,8),
-	NoResize = true
+	Position = UDim2.fromOffset(9, 8),
+	NoResize = true,
 })
 local function notify(text, duration, title)
 	if game.PlaceId == 606849621 then
 		require(game:GetService("ReplicatedStorage").Game.Notification).new({
 			Text = text,
-			Duration = duration
+			Duration = duration,
 		})
 	else
 		game:GetService("StarterGui"):SetCore("SendNotification", {
 			Title = title,
-			Text = text
+			Text = text,
 		})
 	end
 end
 local utlTab = Window:CreateTab({
-	Name = "Utilities"
+	Name = "Utilities",
 })
 Window:ShowTab(utlTab)
 utlTab:Separator({})
@@ -33,7 +33,7 @@ iyRow:Button({
 	Callback = function()
 		loadstring(game:HttpGet("https://raw.githubusercontent.com/EdgeIY/infiniteyield/master/source", true))()
 		notify("Successfully loaded!", 2, "Infinite Yield")
-	end
+	end,
 })
 iyRow:Fill()
 utlTab:Separator({})
@@ -46,14 +46,14 @@ gptRow1:Button({
 	Callback = function()
 		loadstring(game:HttpGet(url .. "MyHub/main/codes/MapLoader.lua", true))()
 		notify("Successfully loaded!", 2, "Map Loader")
-	end
+	end,
 })
 gptRow1:Button({
 	Text = "AntiLag",
 	Callback = function()
 		loadstring(game:HttpGet(url .. "MyHub/main/codes/AntiLag.lua", true))()
 		notify("Successfully optimized!", 2, "Anti Lag")
-	end
+	end,
 })
 gptRow1:Fill()
 local gptRow2 = gptNode:Row()
@@ -62,14 +62,14 @@ gptRow2:Button({
 	Callback = function()
 		loadstring(game:HttpGet(url .. "MyHub/main/codes/FlingAll.lua", true))()
 		notify("Successfully started!", 2, "Fling All")
-	end
+	end,
 })
 gptRow2:Button({
 	Text = "InfSession",
 	Callback = function()
 		loadstring(game:HttpGet(url .. "MyHub/main/codes/InfSession.lua", true))()
 		notify("Successfully enabled!", 2, "Infinite Session")
-	end
+	end,
 })
 gptRow2:Fill()
 utlTab:Separator({})
@@ -82,21 +82,21 @@ utlRow1:Button({
 	Callback = function()
 		loadstring(game:HttpGet(url .. "MyHub/main/codes/UnnamedESP.lua", true))()
 		notify("Successfully loaded!", 2, "UnnamedESP")
-	end
+	end,
 })
 utlRow1:Button({
 	Text = "WRD Aimbot",
 	Callback = function()
 		loadstring(game:HttpGet(url .. "MyHub/main/codes/WRDAimbot.lua", true))()
 		notify("Successfully enabled!", 2, "WRD Aimbot")
-	end
+	end,
 })
 utlRow1:Button({
 	Text = "Freecam",
 	Callback = function()
 		loadstring(game:HttpGet(url .. "MyHub/main/codes/Freecam.lua", true))()
 		notify("Successfully enabled!", 2, "Freecam")
-	end
+	end,
 })
 utlRow1:Fill()
 local utlRow2 = randUtlNode:Row()
@@ -107,18 +107,18 @@ utlRow2:Button({
 		btools:ClearAllChildren()
 		workspace.CurrentCamera:Destroy()
 		btools.Parent = workspace
-		for i=2,4 do
-			Instance.new("HopperBin", game:GetService'Players'.LocalPlayer.Backpack).BinType = i
+		for i = 2, 4 do
+			Instance.new("HopperBin", game:GetService("Players").LocalPlayer.Backpack).BinType = i
 		end
 		notify("Successfully given!", 2, "Btools")
-	end
+	end,
 })
 utlRow2:Button({
 	Text = "Console Dumper",
 	Callback = function()
 		loadstring(game:HttpGet(url .. "MyHub/main/codes/ConsoleDumper.lua", true))()
 		notify("Successfully dumped!", 2, "Console Dumper")
-	end
+	end,
 })
 utlRow2:Fill()
 local utlRow3 = randUtlNode:Row()
@@ -126,17 +126,21 @@ utlRow3:Button({
 	Text = "Kick yourself",
 	Callback = function()
 		game.Players.LocalPlayer:Kick("kicked")
-	end
+	end,
 })
 utlRow3:Button({
 	Text = "Reset character",
 	Callback = function()
-		if game.Players.LocalPlayer.Character and game.Players.LocalPlayer.Character:FindFirstChildWhichIsA("Humanoid") then
-			game.Players.LocalPlayer.Character:FindFirstChildWhichIsA("Humanoid"):ChangeState(Enum.HumanoidStateType.Dead)
+		if
+			game.Players.LocalPlayer.Character and game.Players.LocalPlayer.Character:FindFirstChildWhichIsA("Humanoid")
+		then
+			game.Players.LocalPlayer.Character
+				:FindFirstChildWhichIsA("Humanoid")
+				:ChangeState(Enum.HumanoidStateType.Dead)
 		else
 			replicatesignal(game.Players.LocalPlayer.Kill)
 		end
-	end
+	end,
 })
 utlRow3:Fill()
 utlTab:Separator({})
@@ -149,65 +153,67 @@ dexRow:Button({
 	Callback = function()
 		loadstring(game:HttpGet("https://github.com/AZYsGithub/DexPlusPlus/releases/latest/download/out.lua", true))()
 		notify("Successfully loaded!", 2, "Dex++")
-	end
+	end,
 })
 dexRow:Button({
 	Text = "DexRecontinued",
 	Callback = function()
 		loadstring(game:HttpGet("https://github.com/Tesker-103/DexRecontinued/releases/latest/download/out.lua", true))()
 		notify("Successfully loaded!", 2, "DexRecontinued")
-	end
+	end,
 })
 dexRow:Button({
 	Text = "VexExplorer",
 	Callback = function()
-		loadstring(game:HttpGet("https://raw.githubusercontent.com/Vezise/2026/main/Vez/VexExplorer/VEXExplorer.lua", true))()
+		loadstring(
+			game:HttpGet("https://raw.githubusercontent.com/Vezise/2026/main/Vez/VexExplorer/VEXExplorer.lua", true)
+		)()
 		notify("Successfully loaded!", 2, "Vex Explorer")
-	end
+	end,
 })
 dexRow:Fill()
 utlTab:Separator({})
 local siNode = utlTab:TreeNode({
-	Title = "SaveInstances",
+	Title = "UniversalSynSaveInstances",
 })
 local ussiRow1 = siNode:Row()
 ussiRow1:Button({
-	Text = "Smart Save",
+	Text = "Ultra Smart",
 	Callback = function()
 		loadstring(game:HttpGet(url .. "MyHub/main/codes/PreSmart.lua", true))()
-		notify("Successfully started!", 2, "Smart Save")
-	end
+		notify("Successfully started!", 2, "Ultra Smart Save")
+	end,
 })
 ussiRow1:Button({
-	Text = "Modded Save",
+	Text = "SirMeme / MrExploit",
 	Callback = function()
-		loadstring(game:HttpGet(url .. "MyHub/main/codes/PreModded.lua", true))()
-		notify("Successfully started!", 2, "Modded Save")
-	end
+		loadstring(game:HttpGet(url .. "MyHub/main/codes/Pre420.lua", true))()
+		notify("Successfully started!", 2, "SirMeme / MrExploit Save")
+	end,
 })
 ussiRow1:Fill()
 siNode:Separator({})
 local ussiRow2 = siNode:Row()
 ussiRow2:Button({
-	Text = "Map Only",
+	Text = "luau",
 	Callback = function()
-		loadstring(game:HttpGet(url .. "MyHub/main/codes/PreMapOnly.lua", true))()
-		notify("Successfully started!", 2, "Map Only Save")
-	end
+		loadstring(game:HttpGet(url .. "MyHub/main/codes/PreLuau.lua", true))()
+		notify("Successfully started!", 2, "luau Save")
+	end,
 })
 ussiRow2:Button({
-	Text = "Map with Terrain",
+	Text = "playvora",
 	Callback = function()
-		loadstring(game:HttpGet(url .. "MyHub/main/codes/PreMapWithTerrain.lua", true))()
-		notify("Successfully started!", 2, "Map with Terrain Save")
-	end
+		loadstring(game:HttpGet(url .. "MyHub/main/codes/PrePlayvora.lua", true))()
+		notify("Successfully started!", 2, "playvora Save")
+	end,
 })
 ussiRow2:Button({
 	Text = "Terrain Only",
 	Callback = function()
 		loadstring(game:HttpGet(url .. "MyHub/main/codes/SITerrainOnly.luau", true))()
 		notify("Successfully saved!", 2, "Terrain Only Save")
-	end
+	end,
 })
 ussiRow2:Fill()
 utlTab:Separator({})
@@ -220,37 +226,37 @@ utlTab:Checkbox({
 })
 utlTab:Separator({})
 local ideTab = Window:CreateTab({
-	Name = "IDE Related"
+	Name = "IDE Related",
 })
 ideTab:Separator({
-	Text = "Functions Tests"
+	Text = "Functions Tests",
 })
 local realRow = ideTab:Row()
 realRow:Button({
 	Text = "sUNC",
 	Callback = function()
 		getgenv().sUNCDebug = {
-    		["printcheckpoints"] = false,
-    		["delaybetweentests"] = 0,
-    		["printtesttimetaken"] = false,
+			["printcheckpoints"] = false,
+			["delaybetweentests"] = 0,
+			["printtesttimetaken"] = false,
 		}
 		notify("Successfully started!", 2, "sUNC")
-		loadstring(game:HttpGet("https://script.sunc.su", true))()
-	end
+		loadstring(game:HttpGet("https://script.sunc.io", true))()
+	end,
 })
 realRow:Button({
 	Text = "Myriad",
 	Callback = function()
-		loadstring(game:HttpGet("https://raw.githubusercontent.com/Proton-Utilities/Myriad/refs/heads/main/dist.luau", true))()
+		loadstring(game:HttpGet("https://github.com/Standard-2/Myriad/releases/latest/download/myriad.luau", true))()
 		notify("Successfully loaded!", 2, "Myriad")
-	end
+	end,
 })
 realRow:Button({
 	Text = "UNC",
 	Callback = function()
 		loadstring(game:HttpGet(url .. "MyHub/main/codes/UNC.lua", true))()
 		notify("Successfully tested!", 2, "UNC")
-	end
+	end,
 })
 realRow:Fill()
 local fakeNode = ideTab:TreeNode({
@@ -262,22 +268,22 @@ fakeRow:Button({
 	Callback = function()
 		loadstring(game:HttpGet(url .. "MyHub/main/codes/FakeSUNC.lua", true))()
 		notify("Successfully faked!", 2, "Fake sUNC")
-	end
+	end,
 })
 fakeRow:Button({
 	Text = "UNC",
 	Callback = function()
 		loadstring(game:HttpGet(url .. "MyHub/main/codes/FakeUNC.lua", true))()
 		notify("Successfully faked!", 2, "Fake UNC")
-	end
+	end,
 })
 fakeRow:Fill()
 ideTab:Separator({})
 local jbTab = Window:CreateTab({
-	Name = "Jailbreak"
+	Name = "Jailbreak",
 })
 jbTab:Separator({
-	Text = "Utility Mods"
+	Text = "Utility Mods",
 })
 local senRow = jbTab:Row()
 senRow:Button({
@@ -285,18 +291,18 @@ senRow:Button({
 	Callback = function()
 		loadstring(game:HttpGet(url .. "MyMenu/main/MyMenu.luau", true))()
 		notify("Successfully loaded!", 2, "MyMenu")
-	end
+	end,
 })
 senRow:Button({
 	Text = "Sensation",
 	Callback = function()
-		loadstring(game:HttpGet("https://api.luarmor.net/files/v3/loaders/730854e5b6499ee91deb1080e8e12ae3.lua", true))()
+		loadstring(game:HttpGet("https://api.luarmor.net/files/v4/loaders/730854e5b6499ee91deb1080e8e12ae3.lua", true))()
 		notify("Successfully loaded!", 2, "Sensation")
-	end
+	end,
 })
 senRow:Fill()
 jbTab:Separator({
-	Text = "Independent Mods"
+	Text = "Independent Mods",
 })
 local indieRow1 = jbTab:Row()
 indieRow1:Button({
@@ -304,14 +310,14 @@ indieRow1:Button({
 	Callback = function()
 		loadstring(game:HttpGet(url .. "MyHub/main/codes/JailbreakHypershift.lua", true))()
 		notify("Successfully enabled!", 2, "Hypershift")
-	end
+	end,
 })
 indieRow1:Button({
 	Text = "Infinite Nitro",
 	Callback = function()
 		loadstring(game:HttpGet(url .. "MyHub/main/codes/JailbreakInfiniteNitro.lua", true))()
 		notify("Successfully enabled!", 2, "Infinite Nitro")
-	end
+	end,
 })
 indieRow1:Fill()
 local indieRow2 = jbTab:Row()
@@ -320,14 +326,14 @@ indieRow2:Button({
 	Callback = function()
 		loadstring(game:HttpGet(url .. "MyHub/main/codes/JailbreakWeaponMods.lua", true))()
 		notify("Successfully modded!", 2, "Gun Mods")
-	end
+	end,
 })
 indieRow2:Button({
 	Text = "QoL Mods",
 	Callback = function()
 		loadstring(game:HttpGet(url .. "MyHub/main/codes/JailbreakQoLMods.lua", true))()
 		notify("Successfully modded!", 2, "QoL Mods")
-	end
+	end,
 })
 indieRow2:Fill()
 jbTab:Separator({})
@@ -341,7 +347,7 @@ paRow:Button({
 		getgenv().script_id = "parob"
 		loadstring(game:HttpGet(url .. "MyHub/main/codes/MultiPremium.lua", true))()
 		notify("Successfully loaded!", 2, "Project Auto - Auto Rob")
-	end
+	end,
 })
 paRow:Button({
 	Text = "AutoArrest",
@@ -349,7 +355,7 @@ paRow:Button({
 		getgenv().script_id = "paarrest"
 		loadstring(game:HttpGet(url .. "MyHub/main/codes/MultiPremium.lua", true))()
 		notify("Successfully loaded!", 2, "Project Auto - Auto Arrest")
-	end
+	end,
 })
 paRow:Fill()
 jbTab:Separator({})
@@ -363,7 +369,7 @@ ufRow:Button({
 		getgenv().script_id = "ufrob"
 		loadstring(game:HttpGet(url .. "MyHub/main/codes/MultiPremium.lua", true))()
 		notify("Successfully loaded!", 2, "Universal Farm - Auto Rob")
-	end
+	end,
 })
 ufRow:Button({
 	Text = "AutoArrest",
@@ -371,7 +377,7 @@ ufRow:Button({
 		getgenv().script_id = "ufarrest"
 		loadstring(game:HttpGet(url .. "MyHub/main/codes/MultiPremium.lua", true))()
 		notify("Successfully loaded!", 2, "Universal Farm - Auto Arrest")
-	end
+	end,
 })
 ufRow:Button({
 	Text = "CrateFarm (PREMIUM)",
@@ -379,15 +385,15 @@ ufRow:Button({
 		getgenv().script_id = "ufcrate"
 		loadstring(game:HttpGet(url .. "MyHub/main/codes/MultiPremium.lua", true))()
 		notify("Successfully loaded!", 2, "Universal Farm - Crate Farm")
-	end
+	end,
 })
 ufRow:Fill()
 jbTab:Separator({})
 local othTab = Window:CreateTab({
-	Name = "Other"
+	Name = "Other",
 })
 othTab:Separator({
-	Text = "Doors"
+	Text = "Doors",
 })
 local doorsRow1 = othTab:Row()
 doorsRow1:Button({
@@ -395,7 +401,7 @@ doorsRow1:Button({
 	Callback = function()
 		loadstring(game:HttpGet(url .. "MyHub/main/codes/DoorsMorePerspectives.lua", true))()
 		notify("Successfully enabled!", 2, "MorePerspectives")
-	end
+	end,
 })
 doorsRow1:Button({
 	Text = "Vynixius",
@@ -403,7 +409,7 @@ doorsRow1:Button({
 		getgenv().script_id = "vyn"
 		loadstring(game:HttpGet(url .. "MyHub/main/codes/MultiPremium.lua", true))()
 		notify("Successfully loaded!", 2, "Vynixius")
-	end
+	end,
 })
 doorsRow1:Fill()
 local doorsRow2 = othTab:Row()
@@ -413,14 +419,14 @@ doorsRow2:Button({
 		getgenv().script_id = "msp"
 		loadstring(game:HttpGet(url .. "MyHub/main/codes/MultiPremium.lua", true))()
 		notify("Successfully loaded!", 2, "mspaint")
-	end
+	end,
 })
 doorsRow2:Button({
 	Text = "Solo Restart",
 	Callback = function()
 		require(game.Players.LocalPlayer.PlayerGui.MainUI.Initiator.Main_Game).remotes.PlayAgain:FireServer()
 		notify("Restarting...", 2, "Solo Restart")
-	end
+	end,
 })
 doorsRow2:Fill()
 othTab:Separator({})
@@ -428,26 +434,28 @@ local fpsNode = othTab:TreeNode({
 	Title = "FPS Games",
 })
 fpsNode:Separator({
-	Text = "Arsenal"
+	Text = "Arsenal",
 })
 local arsenalRow = fpsNode:Row()
 arsenalRow:Button({
 	Text = "Thunder Client",
 	Callback = function()
-		loadstring(game:HttpGet("https://raw.githubusercontent.com/andrewdarkyyofficial/thunderclient/main/main.lua", true))()
+		loadstring(
+			game:HttpGet("https://raw.githubusercontent.com/andrewdarkyyofficial/thunderclient/main/main.lua", true)
+		)()
 		notify("Successfully loaded!", 2, "Thunder Client")
-	end
+	end,
 })
 arsenalRow:Button({
 	Text = "FELIPEHUB",
 	Callback = function()
 		loadstring(game:HttpGet("https://raw.githubusercontent.com/FELIPEHUB1/Felipehub-scripts/main/Arsenal", true))()
 		notify("Successfully loaded!", 2, "FELIPEHUB")
-	end
+	end,
 })
 arsenalRow:Fill()
 fpsNode:Separator({
-	Text = "Rivals"
+	Text = "Rivals",
 })
 local rivalsRow = fpsNode:Row()
 rivalsRow:Button({
@@ -456,14 +464,14 @@ rivalsRow:Button({
 		getgenv().script_id = "kicia"
 		loadstring(game:HttpGet(url .. "MyHub/main/codes/MultiPremium.lua", true))()
 		notify("Successfully loaded!", 2, "KiciaHook")
-	end
+	end,
 })
 rivalsRow:Button({
 	Text = "ESP & Aimbot",
 	Callback = function()
 		loadstring(game:HttpGet(url .. "MyHub/main/codes/RivalsESPAimbot.lua", true))()
 		notify("Successfully loaded!", 2, "ESP & Aimbot")
-	end
+	end,
 })
 rivalsRow:Fill()
 fpsNode:Separator({})
@@ -471,9 +479,11 @@ local fpsRow = fpsNode:Row()
 fpsRow:Button({
 	Text = "NEVERLOSE (Flick)",
 	Callback = function()
-		loadstring(game:HttpGet("https://raw.githubusercontent.com/CludeHub/NEVERLOSE/main/NEVERLOSE-FLICK-V2.lua", true))()
+		loadstring(
+			game:HttpGet("https://raw.githubusercontent.com/CludeHub/NEVERLOSE/main/NEVERLOSE-FLICK-V2.lua", true)
+		)()
 		notify("Successfully loaded!", 2, "NEVERLOSE")
-	end
+	end,
 })
 fpsRow:Fill()
 othTab:Separator({})
@@ -484,23 +494,25 @@ local bwRow = bwNode:Row()
 bwRow:Button({
 	Text = "VapeV4",
 	Callback = function()
-		loadstring(game:HttpGet("https://raw.githubusercontent.com/7GrandDadPGN/VapeV4ForRoblox/main/NewMainScript.lua", true))()
+		loadstring(
+			game:HttpGet("https://raw.githubusercontent.com/7GrandDadPGN/VapeV4ForRoblox/main/NewMainScript.lua", true)
+		)()
 		notify("Successfully loaded!", 2, "VapeV4")
-	end
+	end,
 })
 bwRow:Button({
 	Text = "VapeVoidWare",
 	Callback = function()
 		loadstring(game:HttpGet("https://files.vapevoidware.xyz/VapeVoidware/VW-Add/main/loader2.lua", true))()
 		notify("Successfully loaded!", 2, "VapeVoidWare")
-	end
+	end,
 })
 bwRow:Button({
 	Text = "CatVape",
 	Callback = function()
 		loadstring(game:HttpGet("https://raw.githubusercontent.com/MaxlaserTech/CatV6/main/init.lua", true), "init.lua")()
 		notify("Successfully loaded!", 2, "CatVape")
-	end
+	end,
 })
 bwRow:Fill()
 othTab:Separator({})
@@ -513,14 +525,14 @@ randRow1:Button({
 	Callback = function()
 		loadstring(game:HttpGet(url .. "MyHub/main/codes/MM2RevealAll.lua", true))()
 		notify("Successfully revealed!", 2, "Reveal Everyone")
-	end
+	end,
 })
 randRow1:Button({
 	Text = "IdentityDetector (Player or AI?)",
 	Callback = function()
 		loadstring(game:HttpGet(url .. "MyHub/main/codes/IdentityDetector.lua", true))()
 		notify("Successfully loaded!", 2, "IdentityDetector")
-	end
+	end,
 })
 randRow1:Fill()
 local randRow2 = randOthNode:Row()
@@ -529,7 +541,7 @@ randRow2:Button({
 	Callback = function()
 		loadstring(game:HttpGet(url .. "MyHub/main/codes/NDSNoFallDamage.lua", true))()
 		notify("Successfully disabled!", 2, "No Fall Damage")
-	end
+	end,
 })
 randRow2:Fill()
 local randRow3 = randOthNode:Row()
@@ -542,7 +554,7 @@ randRow3:Button({
 			item = item + 1
 		end
 		notify("Successfully given!", 2, "Items Giver")
-	end
+	end,
 })
 randRow3:Fill()
 othTab:Separator({})
@@ -555,14 +567,14 @@ plRow:Button({
 	Callback = function()
 		loadstring(game:HttpGet(url .. "MyHub/main/codes/PrisonLifeULTRAHAX.lua", true))()
 		notify("Successfully loaded!", 2, "ULTRA HAX")
-	end
+	end,
 })
 plRow:Button({
 	Text = "Silent Aim & ESP",
 	Callback = function()
 		loadstring(game:HttpGet(url .. "MyHub/main/codes/PrisonLifeSilentAimESP.lua", true))()
 		notify("Successfully loaded!", 2, "Silent Aim & ESP")
-	end
+	end,
 })
 plRow:Fill()
 othTab:Separator({})

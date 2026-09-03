@@ -23,7 +23,7 @@ local PrepassOptions = {
     SkipPrepass       = false,
     SkipSaveInstance  = false,
     UssiRepoURL       = "https://raw.githubusercontent.com/RiseBlox/MyHub/main/codes/",
-    UssiScript        = "SIMapOnly",
+    UssiScript        = "SILuau",
 }
 
 ussiprepass(Options, PrepassOptions)
