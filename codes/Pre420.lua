@@ -13,8 +13,10 @@ local Options = {
     IgnoreList = {},
     NilInstances = true,
     SavePlayerGui = true,
-    SetStreaming = false,
-    DecompilePrepass = false,
+    SetStreaming = true,
+    DecompilePrepass = true,
+    NeutralizeLighting = false,
+    ExportObj = true, 
 }
 
 local PrepassOptions = {
@@ -22,7 +24,7 @@ local PrepassOptions = {
     MaxInFlight       = 30,
     ApiUrl            = "https://api.lua.expert/decompile",
     Verbose           = true,
-    SkipPrepass       = false,
+    SkipPrepass       = true,
     SkipSaveInstance  = false,
     UssiRepoURL       = "https://raw.githubusercontent.com/RiseBlox/MyHub/main/codes/",
     UssiScript        = "SI420",
