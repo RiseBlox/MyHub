@@ -1,3 +1,5 @@
+getgenv().script_id = "kicia"
+
 local configs = {
 	parob = {
 		name = "Project Auto - Auto Rob",
@@ -54,7 +56,7 @@ local configs = {
 		}
 	},
 	vyn = {
-		name = "Vynixius / Astral",
+		name = "Vynixius",
 		key = "https://vynixius.win/getkey",
 		load = "https://vynixius.win/loader.luau",
 		palette = {
@@ -70,7 +72,7 @@ local configs = {
 		palette = {
 			main = "#7dc4ff",
 			box = "#324e66",
-			text = "#000000"
+			text = "#ffffff"
 		}
 	},
 	kicia = {
