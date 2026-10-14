@@ -11,7 +11,7 @@
 
 ]]
 
-if game.PlaceId == 606849621 then
+if game.GameId == 245662005 then
 	require(game:GetService("ReplicatedStorage").Game.Notification).new({
 		Text = "Successfully loaded!",
 		Duration = 2

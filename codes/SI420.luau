@@ -1,3 +1,65 @@
+--!native
+--!optimize 2
+
+-- BEGIN STREAMING PLAN
+local function streamNumber(value, fallback, low, high)
+    local n = tonumber(value)
+    if not n or n ~= n or math.abs(n) == math.huge then n = fallback end
+    return math.clamp(n, low, high)
+end
+local function BuildStreamingPlan(O, player)
+    local number = streamNumber
+	local spacing = number(O.StreamingRadius, 512, 64, 4096)
+	local area = number(O.StreamingAreaSize, 10000, 0, 100000)
+	local slices = math.floor(number(O.StreamingSlices, 2, 1, 8))
+	local passes = math.floor(number(O.StreamingPasses, 1, 1, 3))
+	local center = O.StreamingCenter
+	if typeof(center) ~= "Vector3" then
+		center = Vector3.new(0, 50, 0)
+		if player and player.Character then center = player.Character:GetPivot().Position end
+	end
+    if center.X ~= center.X or center.Y ~= center.Y or center.Z ~= center.Z
+        or math.abs(center.X)==math.huge or math.abs(center.Y)==math.huge or math.abs(center.Z)==math.huge then
+        return false, "Invalid StreamingCenter"
+    end
+	local divisions = math.max(1, math.ceil(area / spacing))
+	local width = area == 0 and 1 or divisions + 1
+	local total = width * width * slices * passes
+	if type(O.StreamingPoints) == "table" then total = #O.StreamingPoints end
+	if total == 0 then return false, "StreamingPoints is empty" end
+	if total > 10000 then return false, "Sweep exceeds 10000 requests; reduce area or increase spacing" end
+	local points = table.create(total)
+	if type(O.StreamingPoints) == "table" then
+		for i = 1, total do
+			local point = O.StreamingPoints[i]
+			if typeof(point) ~= "Vector3" or point.X ~= point.X or point.Y ~= point.Y or point.Z ~= point.Z
+				or math.abs(point.X) == math.huge or math.abs(point.Y) == math.huge or math.abs(point.Z) == math.huge then
+				return false, "Invalid StreamingPoints entry " .. i
+			end
+			points[i] = point
+		end
+	else
+	for _ = 1, passes do
+		for xi = 0, width - 1 do
+			for zi = 0, width - 1 do
+				-- Alternate row direction; both outer edges are always included.
+				local zindex = xi % 2 == 0 and zi or (width - 1 - zi)
+				for yi = 0, slices - 1 do
+					points[#points + 1] = center + Vector3.new(
+						area == 0 and 0 or -area / 2 + xi * area / divisions,
+						(yi - (slices - 1) / 2) * spacing * 0.8,
+						area == 0 and 0 or -area / 2 + zindex * area / divisions)
+				end
+			end
+		end
+	end
+	end
+    return {points=points, total=total, center=center, spacing=spacing, area=area,
+        divisions=divisions, width=width, slices=slices, passes=passes, custom=type(O.StreamingPoints)=="table"}
+end
+-- END STREAMING PLAN
+
+local function InitializeSaver()
 local realcheck = true
 local imagonnaaddmorecheck, _ = pcall(function()
 	gethiddenproperty(workspace.Terrain, "SmoothGrid")
@@ -7,34 +69,10 @@ if not imagonnaaddmorecheck then
 	realcheck = false
 end
 
-local b = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/'
 local table = table
 local string = string
 local math = math
 local tonumber = tonumber
-local function to_base64(data)
-	local result, bit_table = {}, {}
-	for i = 1, #data do
-		local byte = data:byte(i)
-		local bits = {}
-		for j = 7, 0, -1 do
-			bits[#bits + 1] = (math.floor(byte / (2 ^ j)) % 2 == 1) and '1' or '0'
-		end
-		bit_table[#bit_table + 1] = table.concat(bits)
-	end
-
-	local bit_string = table.concat(bit_table)
-	bit_string = bit_string .. string.rep('0', (6 - #bit_string % 6) % 6)
-
-	for i = 1, #bit_string, 6 do
-		local chunk = bit_string:sub(i, i + 5)
-		local index = tonumber(chunk, 2) + 1
-		result[#result + 1] = b:sub(index, index)
-	end
-
-	local padding = (#data % 3 == 1 and '==') or (#data % 3 == 2 and '=' or '')
-	return table.concat(result) .. padding
-end
 
 if gethiddenproperty and realcheck then
 	getgenv().gethiddenpropertygethiddenproperty = gethiddenproperty
@@ -119,7 +157,9 @@ local appendfile = appendfile
 local readfile = readfile
 local writefile = writefile
 
-local getscriptbytecode = global_container.getscriptbytecode -- * A lot of assumptions are made based on whether this function is defined or not. So in certain edge cases, like if the executor defines "decompile" or "getscripthash" function yet doesn't define this function there might be loss of functionality of the saveinstance. Although that would be very rare and weird
+-- Prefer the exact API: fuzzy discovery can select getfunctionbytecode, which
+-- accepts functions rather than Script instances (observed on Volt).
+local getscriptbytecode = type(getscriptbytecode) == "function" and getscriptbytecode or global_container.getscriptbytecode
 local base64encode = global_container.base64encode
 local sha384
 
@@ -247,31 +287,35 @@ do -- * Load Region of Déjà Vu
 
 	do
 		local hash = global_container.hash
+		local expected = "cb00753f45a35e8bb5a03d699ac65007272c32ab0eded1631a8b605a43ff5bed8086072ba1e7cc2358baeca134c825a7"
+		local function valid_sha384(candidate)
+			local ok, digest = pcall(candidate, "abc")
+			return ok and type(digest) == "string" and string.lower(digest) == expected
+		end
 
 		if hash then
-			sha384 = function(data)
+			local native_sha384 = function(data)
 				return hash(data, "sha384")
+			end
+			if valid_sha384(native_sha384) then
+				sha384 = native_sha384
 			end
 		end
 
-		local filename = "RequireOnlineModule"
-
-		-- Credits @boatbomber
-		local hashlib_sha384
-		pcall(function()
-			hashlib_sha384 = loadstring(
-				game:HttpGet("https://raw.githubusercontent.com/luau/SomeHub/main/" .. filename .. ".luau", true),
-				filename
-			)()(4544052033).sha384
-		end)
-
-		-- * Tests if sha384 exists then benchmark it
-		if hashlib_sha384 then
-			if sha384 then
-				sha384 = benchmark(sha384, hashlib_sha384, test_str)
-			else
-				sha384 = hashlib_sha384
-			end
+		-- Only load the asset-based fallback when native hashing is unavailable or wrong.
+		-- Avoid the asset-loader path that stalled during startup on Volt.
+		if not sha384 then
+			local filename = "RequireOnlineModule"
+			-- Credits @boatbomber
+			pcall(function()
+				local candidate = loadstring(
+					game:HttpGet("https://raw.githubusercontent.com/luau/SomeHub/main/" .. filename .. ".luau", true),
+					filename
+				)()(4544052033).sha384
+				if type(candidate) == "function" and valid_sha384(candidate) then
+					sha384 = candidate
+				end
+			end)
 		end
 
 		assert(sha384, "sha384 hash function not found")
@@ -334,6 +378,8 @@ local function dbg(...)
 		parts[i] = tostring((select(i, ...)))
 	end
 	debug_log[#debug_log + 1] = string.format("[%7.2f] %s", os.clock() - debug_clock0, table.concat(parts, " "))
+	-- Persist checkpoints while the client is alive, not only after a successful run.
+	pcall(writefile, "saveinstance-debug.txt", table.concat(debug_log, "\n"))
 end
 
 local inherited_properties = {}
@@ -1735,6 +1781,7 @@ local GLOBAL_ENV = getgenv and getgenv() or _G or shared
 --- @field scriptcache boolean -- ___Default:___ true
 --- @field decomptype string -- * Deprecated. ___Default:___ Uses your executor's decompiler, if available.
 --- @field timeout number -- If the decompilation run time exceeds this value it gets cancelled. Set to -1 to disable timeout (unreliable). ***Aliases***: `DecompileTimeout`. ___Default:___ 10
+--- @field DecompilerName string -- Optional display label for an installed decompile() hook, e.g. "Oracle". Does not install or select a provider. Cached source retains its recorded provenance.
 --- @field DecompileJobless boolean -- Includes already decompiled code in the output. No new scripts are decompiled. ___Default:___ false
 --- @field SaveBytecode boolean -- Includes bytecode in the output. Useful if you wish to be able to decompile it yourself later. ___Default:___ false
 --- .DecompileIgnore {Instance | Instance.ClassName | [Instance.ClassName] = {Instance.Name}} -- * Ignores match & it's descendants by default. To Ignore only the instance itself set the value to `= false`. Examples: "Chat", - Matches any instance with "Chat" ClassName, Players = {"MyPlayerName"} - Matches "Players" Class AND "MyPlayerName" Name ONLY, `workspace` - matches Instance by reference, `[workspace] = false` - matches Instance by reference and only ignores the instance itself and not it's descendants. ___Default:___ {TextChatService}
@@ -1742,7 +1789,7 @@ local GLOBAL_ENV = getgenv and getgenv() or _G or shared
 --- .ExtraInstances {Instance} -- If used with any invalid mode (like "invalidmode") it will only save these instances. ___Default:___ {}
 --- @field IgnoreProperties table -- Ignores properties by Name. ___Default:___ {}
 --- @field SaveCacheInterval number -- The less the value the more often it saves, but that would mean less performance due to constantly saving. ___Default:___ 0x1600 * 10
---- @field FilePath string -- Must only contain the name of the file, no file extension. ___Default:___ false
+--- @field FilePath string -- Optional output name without an extension. When omitted, uses the place name, place ID, and UTC timestamp. ___Default:___ false
 --- @field Object Instance -- * If provided, saves as .rbxmx (Model file) instead. If Object is game, it will be saved as a .rbxl file. **MUST BE AN INSTANCE REFERENCE, FOR EXAMPLE - *game.Workspace***. `"optimized"` mode is **NOT** supported with this option. If IsModel is set to false then Object specified here will be saved as a place file. ___Default:___ false
 --- @field IsModel boolean -- If Object is specified then sets to true automatically, unless you set it to false. ___Default:___ false
 --- @field NilInstances boolean -- Save instances that aren't Parented (Parented to nil). ___Default:___ false
@@ -1764,20 +1811,29 @@ local GLOBAL_ENV = getgenv and getgenv() or _G or shared
 --- @field IgnoreSharedStrings boolean -- * **RISKY: FIXES CRASHES (TEMPORARY, TESTED ON ROEXEC ONLY). FEEL FREE TO DISABLE THIS TO SEE IF IT WORKS FOR YOU**. ___Default:___ true
 --- @field SharedStringOverwrite boolean -- * **RISKY:** if the process is not finished aka crashed then none of the affected values will be available. SharedStrings can also be used for ValueTypes that aren't `SharedString`, this behavior is not documented anywhere but makes sense (Could create issues though, due to _potential_ ValueType mix-up, only works on certain types which are all base64 encoded so far). Reason: Allows for potential smaller file size (can also be bigger in some cases). ___Default:___ false
 --- @field TreatUnionsAsParts boolean -- * **RISKY:** Converts all UnionOperations to Parts. Useful if your Executor isn't able to save (read) Unions, because otherwise they will be invisible. ___Default:___ false (except Solara)
---- @field SetStreaming boolean -- * Before saving, force-loads an entire `StreamingEnabled` map into memory so saveinstance captures the WHOLE map instead of only the chunks near you. Pins loaded content (`ModelStreamingMode = Persistent`) so nothing streams back out, then sweeps a grid with `RequestStreamAroundAsync`. Can be slow and laggy on large maps. ___Aliases:___ `Streaming`. ___Default:___ false
---- @field StreamingAreaSize number -- * Side length (studs) of the square area swept around your starting position when `SetStreaming` is on. ___Default:___ 10000
---- @field StreamingRadius number -- * Per-request stream radius. Auto-uses the game's `StreamingTargetRadius` when readable. ___Default:___ 1024
+--- @field StreamingPreview boolean|string -- Preview the planned area without streaming or saving. Use "clear" to remove it. Alias: PreviewOnly. Default: false
+--- @field StreamingPreviewTransparency number -- Preview plane transparency from 0 to 1. Default: 0.5
+--- @field SetStreaming boolean -- Requests the configured area before saving. Completeness still depends on replication and retained content. Alias: Streaming. Default: false
+--- @field StreamingAreaSize number -- Square side length around StreamingCenter, in studs. Default: 10000
+--- @field StreamingCenter Vector3|boolean -- Center of the sweep; false uses character position. Default: false
+--- @field StreamingPasses number -- Number of sweeps, 1 to 3. Default: 1
+--- @field StreamingRequireComplete boolean -- Cancel export when the sweep fails, expires, or stays unsettled. Removals are reported separately because games also destroy parts normally. Default: true
+--- @field StreamingRadius number -- Grid spacing and observation radius; this does not change the engine streaming radius. Default: 512
 --- @field StreamingTimeout number -- * Seconds to wait per `RequestStreamAroundAsync` request. ___Default:___ 20
---- @field StreamingConcurrency number|boolean -- * How many stream requests are kept in flight at once (higher = faster, more load). `false` = auto-scale to the grid size. ___Default:___ false (auto)
+--- @field StreamingConcurrency number -- Actual requests in flight, capped at 8. Default: 4
 --- @field StreamingSlices number -- * Vertical layers swept per grid cell; raise for tall maps. ___Default:___ 2
---- @field StreamingMaxTime number|boolean -- * Overall seconds cap for the streaming sweep. It gives up on stuck/empty chunks (common on ocean-heavy maps where `RequestStreamAroundAsync` hangs) and proceeds. `false` = auto-scale to the grid size (bigger maps get a longer cap, 60s–15m). Set a number to force it. ___Default:___ false (auto)
---- @field StreamingChunkWait number -- * Max seconds to wait for one chunk to finish loading. The sweep waits until a region stops gaining parts (stability detection), capped here — dense regions load fully, empty ones return fast. ___Default:___ 12
+--- @field StreamingMaxTime number|boolean -- Overall sweep deadline (maximum 3600 seconds). false derives a budget from request count. Incomplete sweeps abort by default.
+--- @field StreamingCancel function|boolean -- Optional callback returning true to cancel the sweep and abort export. Default: false
+--- @field StreamingPoints table|boolean -- Explicit Vector3 request positions instead of a generated grid. Default: false
+--- @field StreamingValidate function|boolean -- Optional post-sweep check returning true on success, or false and a reason. Default: false
+--- @field StreamingChunkWait number -- Post-request observation cap; unchanged part counts are not proof of completeness. Default: 6
 --- @field StreamingSettleTime number -- * Seconds to wait after the streaming sweep for in-flight background terrain/loads to finish before saving. Also caps the post-sweep terrain-stabilization poll (waits until SmoothGrid stops growing) so terrain fills in instead of leaving floating islands. ___Default:___ 5
 --- @field NeutralizeLighting boolean -- * Reset `Lighting` (ClockTime/Fog/Ambient), `Atmosphere`, post-effects (ColorCorrection/Bloom/Blur/SunRays/DoF) and clouds to clean midday right before saving, so the place opens BRIGHT instead of inheriting the game's dark/foggy/night atmosphere (the "all grey on the camera" look). `false` keeps the game's real lighting. ___Default:___ false
---- @field ExportObj boolean -- * Also write a world-space `.obj` of all MeshPart geometry next to the save. Geometry is recovered with `AssetService:CreateEditableMeshAsync`, which works even for PRIVATE game meshes that Studio can't re-download (those save as grey boxes). The `.obj` (with per-part vertex colors) opens in Blender or Studio's 3D importer. MeshParts can't be made to render inside the place file itself, so this is the only way to recover their visuals. Best paired with `SetStreaming` (load the whole map first). World-space baking duplicates reused meshes, so big maps produce large files. ___Default:___ false
+--- @field ExportObj boolean -- Attempt a separate world-space mesh export to .obj. Requires access through the mesh APIs; restricted assets may remain unavailable. Large maps can produce large files. Default: false
 --- @field Debug boolean -- * Writes a detailed run log to `saveinstance-debug.txt` in the executor workspace (executor, capabilities, options, streaming/prepass/decompile stats, save result). Share it for diagnosis. ___Default:___ false
---- @field DecompilePrepass boolean -- * **RISKY:** Before saving, decompiles every client script in parallel via an external API (`api.lua.expert`) and pre-fills the decompile cache, so the save's decompile step is near-instant. Big speedup on script-heavy games. Sends script bytecode to a third-party API; needs `getscriptbytecode` + an HTTP request function. ___Default:___ false
---- @field PrepassConcurrency number -- * Parallel decompile requests kept in flight during the prepass. ___Default:___ 24
+--- @field DecompilePrepass boolean -- Pre-decompile eligible exported scripts through the selected provider with bounded concurrency. Providers such as Oracle and lua.expert send bytecode remotely. ___Default:___ false
+--- @field PrepassConcurrency number -- * Parallel decompile requests kept in flight during the prepass. ___Default:___ 4 (maximum 8)
+--- @field PrepassMaxTime number -- Overall prepass worker deadline in seconds. Aborted jobs are not replaced by on-demand calls. ___Default:___ 300
 --- @field PrepassRateGap number -- * Minimum seconds between decompile-API requests (lua.expert rejects unthrottled bursts). Lower = faster if the API allows. ___Default:___ 0.12
 --- @field PrepassApiUrl string -- * Endpoint used by the decompile prepass. ___Default:___ "https://api.lua.expert/decompile"
 --- @field PrepassMaxScripts number -- * Upper bound for `DecompilePrepass`. If the game has more than this many client scripts, the prepass is skipped and scripts decompile on-demand during the save instead. The gather is cheap, the workers are throttled (reading thousands of scripts' bytecode no longer bursts/crashes), and decompiles are API-rate-limited, so this just avoids an absurdly long prepass on games so large the prepass would risk destabilizing an already memory-heavy client (e.g. Grow a Garden 2 with 25k+ scripts); those fall back to the stable on-demand decompile. ___Default:___ 6000
@@ -1799,7 +1855,7 @@ local GLOBAL_ENV = getgenv and getgenv() or _G or shared
 	Saves instances with specified options. Example:
 	```lua
 	local Params = {
-		RepoURL = "https://raw.githubusercontent.com/RealSlimShady2000/SaveInstance420Edition/main/",
+		RepoURL = "https://sirmemegithub.com/RealSlimShady2000/SaveInstance420Edition/raw/branch/main/",
 		SSI = "saveinstance",
 	}
 
@@ -1815,214 +1871,167 @@ local GLOBAL_ENV = getgenv and getgenv() or _G or shared
 	@param Parameter_2 table -- [OPTIONAL] If present, then Parameter_2 will be assumed to be [SynSaveInstance.CustomOptions table]. And then if the Parameter_1 is an Instance, then it will be assumed to be [SynSaveInstance.CustomOptions table].Object. If Parameter_1 is a table filled with instances ({Instance}), then it will be assumed to be [SynSaveInstance.CustomOptions table].ExtraInstances and IsModel will be true). This exists for sake compatibility with `saveinstance(game, {})`
 ]=]
 
--- Waits until the region around `point` stops gaining parts (i.e. it has finished streaming in), or
--- until maxWait. More thorough than a fixed wait: dense regions get the time they actually need,
--- while empty/ocean regions return quickly. Used per chunk so the sweep captures full content.
+-- Observe anchored geometry until its count stabilizes, bounded by maxWait.
+-- Moving vehicles/characters entering query bounds must not keep a map region unsettled.
+-- Both increases and decreases reset the observation window.
+-- A stable local part count is an observation, not proof of server completeness.
 local function wait_region_loaded(point, radius, maxWait)
 	local function count()
 		local ok, parts = pcall(workspace.GetPartBoundsInRadius, workspace, point, radius)
-		return (ok and parts) and #parts or 0
+		if not ok or not parts then return nil end
+		local anchored = 0
+		for _, part in parts do if part.Anchored then anchored += 1 end end
+		return anchored
 	end
-	local last, stableFor, elapsed = count(), 0, 0
-	local minObserve = 1.5 -- observe at least this long so we don't bail before loading even starts
-	while elapsed < maxWait do
-		task.wait(0.35)
-		elapsed += 0.35
+	local started, last, stableSince = os.clock(), count(), os.clock()
+	if last == nil then return false end
+	while os.clock() - started < maxWait do
+		task.wait(0.5)
 		local now = count()
-		if now > last then
-			last, stableFor = now, 0
-		else
-			stableFor += 0.35
+		if now == nil then return false end
+		if now ~= last then
+			last, stableSince = now, os.clock()
 		end
-		if elapsed >= minObserve and stableFor >= 1 then -- no new parts for ~1s → region is loaded
-			break
+		if os.clock() - started >= 2 and os.clock() - stableSince >= 1.5 then
+			return true
 		end
 	end
+	return false
 end
 
--- Force-loads an entire StreamingEnabled map into memory before saving, so saveinstance captures
--- the whole map instead of only the chunks near the player (inspired by centerepic's Streamer7).
--- It pins loaded content (ModelStreamingMode = Persistent) so it can't stream back out, then fans
--- out Player:RequestStreamAroundAsync over a grid with bounded concurrency. RequestStreamAroundAsync
--- yields until each region is loaded, which is far faster than the original teleport-then-poll loop.
--- Headless; calls report(done, total) for progress. Returns true, or false + reason if it can't run.
+-- Requests are bounded and awaited. No player movement or client-side Persistent edits.
+-- The cleanup callback keeps the retention setting in effect until serialization finishes.
 local function StreamEntireMap(O, report)
 	if not workspace.StreamingEnabled then
-		return false, "StreamingEnabled is off (nothing to stream)"
+		return true, "Streaming is disabled; no sweep needed"
 	end
-
-	local LocalPlayer = service.Players.LocalPlayer
-	if not LocalPlayer then
-		return false, "No LocalPlayer (cannot stream)"
+	local player = service.Players.LocalPlayer
+	if not player then return false, "No LocalPlayer" end
+	if O.SafeMode then return false, "Streaming requires a connected client; disable SafeMode" end
+	local function number(value, fallback, low, high)
+		local n = tonumber(value)
+		if not n or n ~= n or math.abs(n) == math.huge then n = fallback end
+		return math.clamp(n, low, high)
 	end
-
-	-- Keep loaded content resident while we sweep: LowMemory only streams out under real memory
-	-- pressure (Opportunistic would evict chunks behind us even without pressure — that's the
-	-- "content gained then lost" gaps). Note: ModelStreamingMode=Persistent below is largely
-	-- server-authoritative and may be a no-op from a client thread, so StreamOutBehavior is the real
-	-- client-side retention lever; we keep the Persistent pin as best-effort (executors run elevated).
-	pcall(function()
-		if sethiddenproperty then
-			sethiddenproperty(workspace, "StreamOutBehavior", Enum.StreamOutBehavior.LowMemory)
-		end
+    local plan, reason = BuildStreamingPlan(O, player)
+    if not plan then return false, reason end
+    local points, total, center, spacing = plan.points, plan.total, plan.center, plan.spacing
+    local concurrency = math.floor(number(O.StreamingConcurrency, 4, 1, 8))
+    local timeout = number(O.StreamingTimeout, 20, 1, 60)
+    local chunkWait = number(O.StreamingChunkWait, 6, 2, 30)
+    local settle = number(O.StreamingSettleTime, 5, 0, 60)
+	local maxTime = number(O.StreamingMaxTime, math.ceil(total / concurrency) * (timeout + chunkWait), 1, 3600)
+	local started = os.clock()
+	local deadline = started + maxTime
+	local nextIndex, done, failed, unsettled, active = 0, 0, 0, 0, concurrency
+	local removedAnchored = 0
+	local trackedRoot = O.Object or workspace
+	local removalConnection = workspace.DescendantRemoving:Connect(function(obj)
+		if obj:IsA("BasePart") and obj.Anchored and obj:IsDescendantOf(trackedRoot) then removedAnchored += 1 end
 	end)
-	local function pin(obj)
-		if obj:IsA("Model") then
-			pcall(function()
-				obj.ModelStreamingMode = Enum.ModelStreamingMode.Persistent
-			end)
+	local oldBehavior, changedBehavior
+	if gethiddenproperty and sethiddenproperty then
+		local ok, old = pcall(gethiddenproperty, workspace, "StreamOutBehavior")
+		if ok and typeof(old) == "EnumItem" then
+			oldBehavior = old
+			changedBehavior = pcall(sethiddenproperty, workspace, "StreamOutBehavior", Enum.StreamOutBehavior.LowMemory)
 		end
 	end
-	local pinConn = workspace.DescendantAdded:Connect(pin)
-	do
-		local pinned = 0
-		for _, descendant in workspace:GetDescendants() do
-			pin(descendant)
-			pinned += 1
-			if pinned % 4000 == 0 then
-				task.wait() -- yield so pinning a huge workspace doesn't freeze the frame
-			end
-		end
+	local cleaned = false
+	local function cleanup()
+		if cleaned then return end
+		cleaned = true
+		removalConnection:Disconnect()
+		if changedBehavior then pcall(sethiddenproperty, workspace, "StreamOutBehavior", oldBehavior) end
+		dbg("[stream] anchored parts removed during sweep/save=", removedAnchored)
 	end
-
-	-- Streaming radius (prefer the live target radius) and a grid over the configured area
-	local radius = tonumber(O.StreamingRadius) or 1024
-	pcall(function()
-		radius = gethiddenproperty(workspace, "StreamingTargetRadius") or radius
-	end)
-	radius = math.max(tonumber(radius) or 1024, 64)
-
-	local half = (tonumber(O.StreamingAreaSize) or 10000) / 2
-	local step = radius -- one request per radius covers the area without gaps
-	local slices = math.max(1, tonumber(O.StreamingSlices) or 2)
-	local timeout = tonumber(O.StreamingTimeout) or 20
-
-	local origin = Vector3.new(0, 50, 0)
-	pcall(function() -- guarded so a GetPivot error can't leak the pinConn below / kill the save
-		local character = LocalPlayer.Character
-		if character then
-			origin = character:GetPivot().Position
-		end
-	end)
-
-	local points = {}
-	for x = origin.X - half, origin.X + half, step do
-		for z = origin.Z - half, origin.Z + half, step do
-			for slice = 0, slices - 1 do
-				local yOffset = (slice - math.floor((slices - 1) / 2)) * (radius * 0.8)
-				points[#points + 1] = Vector3.new(x, origin.Y + yOffset, z)
-				if #points % 2000 == 0 then
-					task.wait() -- yield so a huge grid (small streaming radius) doesn't freeze the frame
-				end
-			end
-		end
-	end
-
-	local total = #points
-	if total == 0 then
-		pinConn:Disconnect()
-		return true
-	end
-
-	-- Fan out RequestStreamAroundAsync with bounded cooperative concurrency (each call yields
-	-- until its region is loaded). Lua coroutines don't preempt mid-statement, so the shared
-	-- counters below are safe without locks.
-	-- Auto-scale concurrency + the time budget to the grid size when they aren't explicitly set:
-	-- small maps finish fast, while big / ocean-heavy maps get more workers and a longer cap so the
-	-- sweep isn't cut off before the real content loads. (Both are still overridable.)
-	local concurrency = math.clamp(tonumber(O.StreamingConcurrency) or (math.floor(total / 40) + 8), 1, 24)
-	-- MAX seconds to wait for ONE chunk to finish loading. We wait for the region to actually stop
-	-- gaining parts (stability), capped here — so dense regions load fully while empty ones return fast.
-	local chunkWait = math.clamp(tonumber(O.StreamingChunkWait) or 12, 2, math.max(timeout, 30))
-	-- Auto budget ≈ worst case (every chunk hits the cap) at this concurrency, clamped 90s–20m. Stability
-	-- detection finishes most chunks far sooner, so in practice the sweep ends well before this ceiling.
-	local maxTime = tonumber(O.StreamingMaxTime) or math.clamp(math.ceil(total / concurrency) * chunkWait, 90, 1200)
-	local streamStart = os.clock()
-	local nextIndex, done, activeWorkers = 0, 0, concurrency
-	dbg("[stream] grid:", total, "chunks | radius:", radius, "| auto concurrency:", concurrency, "| auto maxTime:", math.floor(maxTime) .. "s")
-
-	for _ = 1, concurrency do
-		task.spawn(function()
-			pcall(function() -- guard: a throw here must NOT skip `activeWorkers -= 1`, or the wait below hangs forever
-				while true do
-					if os.clock() - streamStart > maxTime then
-						return -- overall streaming time budget reached; proceed with whatever loaded
-					end
+	dbg("[stream] requests=", total, "| center=", center, "| spacing=", spacing,
+		"| concurrency=", concurrency, "| budget=", maxTime, "| retention set=", changedBehavior == true)
+	local workers, pending, unsettledPoints = {}, {}, {}
+	local abortReason
+	for workerId = 1, concurrency do
+		workers[#workers + 1] = task.spawn(function()
+			local workerOk, workerError = pcall(function()
+				while os.clock() < deadline do
 					nextIndex += 1
 					local point = points[nextIndex]
-					if not point then
-						return
+					if not point then return end
+					local requestStarted = os.clock()
+					pending[workerId] = {started = requestStarted, index = nextIndex}
+					-- Await this request before allowing this worker to issue another.
+					local ok, err = pcall(player.RequestStreamAroundAsync, player, point, math.min(timeout, deadline - os.clock()))
+					pending[workerId] = nil
+					local requestElapsed = os.clock() - requestStarted
+					if not ok or requestElapsed >= timeout then
+						failed += 1
+						dbg("[stream] request failed/timed out at", point, "|", err or "timeout reached")
+					elseif not wait_region_loaded(point, spacing, math.min(chunkWait, math.max(0, deadline - os.clock()))) then
+						unsettled += 1
+						unsettledPoints[#unsettledPoints + 1] = point
 					end
-					-- Fire the stream request (fire-and-forget); the engine loads the region in the background.
-					task.spawn(function()
-						pcall(function()
-							LocalPlayer:RequestStreamAroundAsync(point, timeout)
-						end)
-					end)
-					-- Wait until the region stops gaining parts (loaded) or chunkWait: dense regions load fully,
-					-- empty/ocean ones return fast. Avoids blocking on the often-hanging RequestStreamAroundAsync.
-					wait_region_loaded(point, radius, chunkWait)
 					done += 1
-					if report then
-						local elapsed = os.clock() - streamStart
-						local eta -- estimate from the average rate so far, capped by the remaining time budget
-						if done > 0 and elapsed > 0.5 then
-							eta = math.max(0, math.min((total - done) * (elapsed / done), maxTime - elapsed))
-						end
-						report(done, total, eta)
+					if done % 16 == 0 or done == total then
+						dbg("[stream] processed=", done, "/", total, "| failed=", failed, "| unsettled=", unsettled,
+							"| removed anchored=", removedAnchored)
 					end
+					if report then report(done, total, (total - done) * ((os.clock() - started) / done)) end
 				end
 			end)
-			activeWorkers -= 1
+			if not workerOk then failed += 1; dbg("[stream] worker error:", workerError) end
+			active -= 1
 		end)
 	end
-
-	-- Lightly drive the character across the grid so player-centric streaming reinforces the sweep
-	task.spawn(function()
-		local stride = math.max(1, math.floor(total / 24))
-		local i = 1
-		while activeWorkers > 0 do
-			local point = points[i]
-			if point then
-				pcall(function()
-					local char = LocalPlayer.Character
-					if char then
-						char:PivotTo(CFrame.new(point))
-					end
-				end)
+	while active > 0 and os.clock() < deadline do
+		if type(O.StreamingCancel) == "function" then
+			local ok, cancel = pcall(O.StreamingCancel)
+			if not ok or cancel then
+				abortReason = ok and "Cancelled by caller" or "Cancellation callback failed"
+				break
 			end
-			i += stride
-			if i > total then
-				i = 1
-			end
-			task.wait(0.15)
 		end
-	end)
-
-	while activeWorkers > 0 do
+		for _, request in pending do
+			if os.clock() - request.started > timeout + 1 then
+				abortReason = "Request watchdog expired at grid point " .. request.index
+				break
+			end
+		end
+		if abortReason then break end
 		task.wait(0.1)
 	end
-
-	-- Settle: let any still-in-flight background loads finish before we stop pinning + save.
-	local settleTime = math.clamp(tonumber(O.StreamingSettleTime) or 3, 0, 60)
-	if settleTime > 0 then
-		dbg("[stream] settling", settleTime .. "s for in-flight loads")
-		if report then
-			report(done, total, settleTime)
-		end
-		task.wait(settleTime)
+	if active > 0 then
+		abortReason = abortReason or "Overall streaming deadline expired"
+		for _, worker in workers do pcall(task.cancel, worker) end
 	end
-
-	pinConn:Disconnect()
-	pcall(function() -- return the character home
-		local char = LocalPlayer.Character
-		if char then
-			char:PivotTo(CFrame.new(origin))
+	-- Slow arrivals can continue after a request returns. Re-observe without issuing
+	-- another native request, keeping the overall deadline in force.
+	if not abortReason then
+		for _, point in unsettledPoints do
+			if type(O.StreamingCancel) == "function" then
+				local ok, cancel = pcall(O.StreamingCancel)
+				if not ok or cancel then abortReason = "Cancelled during final settling"; break end
+			end
+			if wait_region_loaded(point, spacing, math.min(chunkWait * 2, math.max(0, deadline - os.clock()))) then
+				unsettled -= 1
+			end
 		end
-	end)
-	local streamElapsed = os.clock() - streamStart
-	dbg("[stream] finished:", done, "/", total, "chunks in", string.format("%.1fs", streamElapsed), "| budget hit:", streamElapsed >= maxTime - 1)
-	return true
+	end
+	if not abortReason and settle > 0 then task.wait(settle) end
+	local complete = not abortReason and done == total and failed == 0 and unsettled == 0
+	if complete and type(O.StreamingValidate) == "function" then
+		local ok, valid, detail = pcall(O.StreamingValidate)
+		if not ok or valid ~= true then
+			complete = false
+			abortReason = "Coverage validation failed: " .. tostring(ok and detail or valid)
+		end
+	end
+	if removedAnchored > 0 then
+		warn("[saveinstance] Anchored parts left the export root during streaming; this may be normal game cleanup or stream-out. Retention is not guaranteed.")
+	end
+	local reason = string.format("%d/%d requests; %d failed/timed out; %d unsettled; %d anchored parts removed",
+		done, total, failed, unsettled, removedAnchored)
+	if abortReason then reason ..= "; " .. abortReason end
+	dbg("[stream] sweep complete=", complete, "|", reason, "| seconds=", os.clock() - started)
+	return complete, reason, cleanup
 end
 
 -- Decompilation prepass: decompiles every client script in PARALLEL via an external API and
@@ -2064,8 +2073,7 @@ local function decompile_via_api(bc, apiUrl, min_gap)
 	})
 	if not ok or type(res) ~= "table" or res.StatusCode ~= 200 then
 		_api_fail += 1
-		local detail = ok and ("HTTP " .. tostring(res and res.StatusCode) .. " — " .. tostring(res and res.Body))
-			or ("error: " .. tostring(res))
+		local detail = ok and type(res) == "table" and ("HTTP " .. tostring(res.StatusCode)) or "request failed"
 		_api_first_fail = _api_first_fail or detail
 		if not _api_warned then -- log the FIRST failure (status/body) so the reason is visible, without spamming
 			_api_warned = true
@@ -2077,145 +2085,355 @@ local function decompile_via_api(bc, apiUrl, min_gap)
 	return res.Body
 end
 
-local function RunDecompilePrepass(ldeccache, O, report)
-	local HttpRequest = request or http_request
-	-- Prefer the executor's OWN decompiler if it has one (Volt now ships one) - no external API,
-	-- no rate limit, no lua.expert. Fall back to lua.expert only when there is no native decompiler.
-	local nativeDecompile = decompile or (getgenv and getgenv().decompile)
-	if not (getscriptbytecode and sha384) then
-		return false, "needs getscriptbytecode + a hash function"
-	end
-	if not nativeDecompile and not (HttpRequest and base64encode) then
-		return false, "needs a native decompiler, or request/http_request for the lua.expert fallback"
-	end
+-- BEGIN DECOMPILER PROVENANCE
+local function cleanDecompilerName(value)
+    if type(value) ~= "string" or value == "" then return nil end
+    return (value:gsub("[%c]", " "):sub(1, 120))
+end
 
-	local apiUrl = O.PrepassApiUrl or "https://api.lua.expert/decompile"
-	local concurrency = math.max(1, tonumber(O.PrepassConcurrency) or 24)
-	local rateGap = tonumber(O.PrepassRateGap) or 0.12
+local function selectDecompiler(O)
+    local callable = type(GLOBAL_ENV.decompile) == "function" and GLOBAL_ENV.decompile or decompile
+    if type(callable) == "function" then
+        local registration = GLOBAL_ENV.__SaveInstanceDecompiler
+        local registeredName = type(registration) == "table" and registration.Function == callable
+            and cleanDecompilerName(registration.Name) or nil
+        return callable, cleanDecompilerName(O.DecompilerName) or registeredName
+            or ("Executor decompile() (" .. (EXECUTOR_NAME ~= "" and EXECUTOR_NAME or "unknown") .. ")")
+    end
+    local endpoint = O.PrepassApiUrl or "https://api.lua.expert/decompile"
+    local host = type(endpoint) == "string" and endpoint:match("^https?://([^/%?#]+)")
+    -- Do not expose credentials, query strings, or arbitrary endpoint paths.
+    host = host and host:match("([^@]+)$") or nil
+    return nil, host == "api.lua.expert" and "lua.expert" or "External API"
+end
 
-	-- Gather unique client scripts (skip server scripts we can't read; dedupe by bytecode hash)
-	-- Safety cap: pre-decompiling every script in a HUGE game (e.g. Grow a Garden 2) OOM-crashes the
-	-- client. If there are more than this many unique scripts, skip the prepass and let them decompile
-	-- on-demand during the save (incremental, far lighter). Raise PrepassMaxScripts to override.
-	local maxScripts = math.max(0, tonumber(O.PrepassMaxScripts) or 2500)
-	local seen, jobs, overCap = {}, {}, false
-	local function consider(o)
-		local okIsA, isLSC = pcall(function()
-			return o:IsA("LuaSourceContainer")
-		end)
-		if not (okIsA and isLSC) then
+local function rememberDecompiler(cache, key, source, name)
+    local metadata = GLOBAL_ENV.scriptcache_decompilers
+    if type(metadata) ~= "table" then
+        metadata = setmetatable({}, {__mode="k"})
+        GLOBAL_ENV.scriptcache_decompilers = metadata
+    end
+    local entries = metadata[cache]
+    if type(entries) ~= "table" then entries = {}; metadata[cache] = entries end
+    entries[key] = {source=source, name=cleanDecompilerName(name) or "Unknown"}
+end
+
+local function cachedDecompiler(cache, key, source)
+    local metadata = GLOBAL_ENV.scriptcache_decompilers
+    local entries = type(metadata) == "table" and metadata[cache]
+    local record = type(entries) == "table" and entries[key]
+    if type(record) == "table" and record.source == source then
+        return (cleanDecompilerName(record.name) or "Unknown") .. " (cached)"
+    end
+    return "Unknown (legacy cache)"
+end
+
+local function savedSourceHeader(source, backend)
+    return ""
+        .. "-- Decompiler used: " .. (cleanDecompilerName(backend) or "Unknown") .. "\n\n" .. source
+end
+-- END DECOMPILER PROVENANCE
+
+-- BEGIN DECOMPILE WORKER POOL
+-- Cooperative concurrency: invoke runs directly in its worker, so a timed-out
+-- native call never releases a slot to start another call. Callbacks must not yield.
+local function RunDecompileJobs(jobs, options, invoke, onComplete, onProgress)
+    options = options or {}
+    local function finite(value)
+        return type(value) == "number" and value == value and math.abs(value) < math.huge
+    end
+    local concurrency = options.concurrency == nil and 4 or options.concurrency
+    assert(finite(concurrency) and concurrency >= 1, "concurrency must be finite and at least 1")
+    concurrency = math.min(8, math.floor(concurrency))
+    local timeout = options.timeout == nil and 10 or options.timeout
+    assert(finite(timeout) and (timeout > 0 or timeout == -1), "timeout must be positive and finite, or -1")
+    local maxTime = options.maxTime == nil and 300 or options.maxTime
+    assert(finite(maxTime) and maxTime > 0, "maxTime must be positive and finite")
+    assert(type(invoke) == "function", "invoke must be a function")
+    assert(onComplete == nil or type(onComplete) == "function", "onComplete must be a function")
+    assert(onProgress == nil or type(onProgress) == "function", "onProgress must be a function")
+    assert(options.abortOnError == nil or type(options.abortOnError) == "function", "abortOnError must be a function")
+
+    local started = os.clock()
+    local total = #jobs
+    local stats = {
+        total = total, concurrency = concurrency, attempted = 0, completed = 0,
+        succeeded = 0, failed = 0, timedOut = 0, aborted = false,
+        elapsed = 0, maxActive = 0, results = {}, callbackErrors = {},
+    }
+    for index = 1, total do
+        stats.results[index] = { status = "not_started", index = index }
+    end
+    local active, threads = {}, {}
+    local activeCount, nextIndex = 0, 1
+    local closed = false
+    local lastProgress = -math.huge
+
+    local function abort(reason, now)
+        if closed then return end
+        closed = true
+        stats.aborted, stats.reason = true, reason
+        for index, record in pairs(active) do
+            local expired = timeout ~= -1 and now - record.started >= timeout
+            record.status = expired and "timed_out" or "cancelled"
+            record.error = expired and "decompiler timeout" or reason
+            record.finished, record.elapsed = now, now - record.started
+            if expired then stats.timedOut += 1 end
+            active[index] = nil
+        end
+        activeCount = 0
+    end
+
+    local function checkDeadline(now)
+        if now - started >= maxTime then
+            abort("max_time", now)
+        elseif timeout ~= -1 then
+            for _, record in pairs(active) do
+                if now - record.started >= timeout then
+                    abort("job_timeout", now)
+                    break
+                end
+            end
+        end
+        return closed
+    end
+
+    local function progress(now)
+        if not onProgress or now - lastProgress < 0.1 then return end
+        lastProgress = now
+        local currentJobs, currentScripts = {}, {}
+        for index, record in pairs(active) do
+            currentJobs[#currentJobs + 1] = { index = index, job = jobs[index], elapsed = now - record.started }
+        end
+        table.sort(currentJobs, function(a, b) return a.index < b.index end)
+        for _, entry in ipairs(currentJobs) do
+            local job = entry.job
+            currentScripts[#currentScripts + 1] = type(job) == "table"
+                and tostring(job.name or job.Name or job.path or job) or tostring(job)
+        end
+        local elapsed = now - started
+        local eta = stats.completed > 0 and elapsed / stats.completed * (total - stats.completed) or nil
+        if total == 0 or stats.completed == total then eta = 0 end
+        if stats.aborted then eta = nil end
+        local ok, err = pcall(onProgress, {
+            total = total, attempted = stats.attempted, completed = stats.completed,
+            succeeded = stats.succeeded, failed = stats.failed, timedOut = stats.timedOut,
+            active = activeCount, queued = total - stats.attempted, maxActive = stats.maxActive,
+            elapsed = elapsed, eta = eta, currentJobs = currentJobs, currentScripts = currentScripts,
+            aborted = stats.aborted, reason = stats.reason, done = closed or stats.completed == total,
+        })
+        if not ok then
+            stats.callbackErrors[#stats.callbackErrors + 1] = { callback = "onProgress", error = tostring(err) }
+            abort("callback_error", os.clock())
+        end
+    end
+
+    local function worker()
+        local sliceStarted = os.clock()
+        while not closed and nextIndex <= total do
+            if os.clock() - sliceStarted >= 0.008 then task.wait(); sliceStarted = os.clock() end
+            local now = os.clock()
+            if checkDeadline(now) or nextIndex > total then return end
+            local index = nextIndex
+            nextIndex += 1
+            local record = stats.results[index]
+            record.status, record.started = "running", now
+            active[index] = record
+            activeCount += 1
+            stats.attempted += 1
+            stats.maxActive = math.max(stats.maxActive, activeCount)
+
+            local ok, result = pcall(invoke, jobs[index], index)
+            now = os.clock()
+            -- Cancellation of a native call may be ineffective. This gate also
+            -- prevents late completions from reaching cache-writing callbacks.
+            if closed or checkDeadline(now) then return end
+            active[index] = nil
+            activeCount -= 1
+            record.finished, record.elapsed = now, now - record.started
+            stats.completed += 1
+            if ok and type(result) == "string" and #result > 0 then
+                record.status, record.source = "succeeded", result
+                stats.succeeded += 1
+            else
+                record.status = "failed"
+                record.error = ok and "decompiler returned no nonempty source string" or tostring(result)
+                stats.failed += 1
+                if options.abortOnError then
+                    local policyOk, reason = pcall(options.abortOnError, record.error)
+                    if not policyOk then
+                        stats.callbackErrors[#stats.callbackErrors + 1] = {
+                            callback = "abortOnError", index = index, error = tostring(reason),
+                        }
+                        abort("callback_error", os.clock())
+                        return
+                    elseif reason then
+                        abort(tostring(reason), os.clock())
+                        return
+                    end
+                end
+            end
+            if onComplete then
+                local callbackOk, err = pcall(onComplete, jobs[index], record, index)
+                if not callbackOk then
+                    stats.callbackErrors[#stats.callbackErrors + 1] = {
+                        callback = "onComplete", index = index, error = tostring(err),
+                    }
+                    abort("callback_error", os.clock())
+                    return
+                end
+            end
+        end
+    end
+
+    progress(started)
+    if not closed then
+        for _ = 1, math.min(concurrency, total) do
+            threads[#threads + 1] = task.spawn(worker)
+            if closed then break end
+        end
+    end
+    while not closed and stats.completed < total do
+        local now = os.clock()
+        checkDeadline(now)
+        progress(now)
+        if not closed and stats.completed < total then task.wait(0.1) end
+    end
+    -- Emit a final update only when the rate limit permits; the returned stats
+    -- always contain final state, including for pools that finish under 100 ms.
+    progress(os.clock())
+    closed = true
+    for _, thread in ipairs(threads) do
+        if coroutine.status(thread) ~= "dead" then pcall(task.cancel, thread) end
+    end
+    stats.elapsed = os.clock() - started
+    return stats
+end
+-- END DECOMPILE WORKER POOL
+
+-- Roots and ignore dictionaries must match the export. No bytecode is read here.
+local function GatherDecompileScripts(roots, IgnoreList, DecompileIgnore, ignoreNotArchivable, overrides, report)
+	local scripts, candidateSeen, visited, stack = {}, {}, {}, {}
+	local stats = { scanned = 0, candidates = 0, skipped = 0, duplicateVisits = 0, errors = 0 }
+	local started, sliceStarted = os.clock(), os.clock()
+	local sinceYield = 0
+	IgnoreList, DecompileIgnore, overrides = IgnoreList or {}, DecompileIgnore or {}, overrides or {}
+	for index = #roots, 1, -1 do
+		stack[#stack + 1] = { roots[index], false }
+	end
+	local function notify()
+		stats.elapsed = os.clock() - started
+		if report then pcall(report, stats) end
+	end
+	local function inspect(instance, inheritedIgnored)
+		-- An explicit root can be exported without the ignored parent of another root.
+		local previous = visited[instance]
+		if previous == 2 or (previous == 1 and inheritedIgnored) then
+			stats.duplicateVisits += 1
 			return
 		end
-		if o:IsA("Script") then
-			local rc = o.RunContext
-			if rc == Enum.RunContext.Server or rc == Enum.RunContext.Legacy then
-				return -- server scripts cannot be decompiled client-side
+		visited[instance] = inheritedIgnored and 1 or 2
+		local className, name = instance.ClassName, instance.Name
+		local exactIgnore, classIgnore = IgnoreList[instance], IgnoreList[className]
+		if (ignoreNotArchivable and not instance.Archivable)
+			or exactIgnore
+			or classIgnore == true
+			or (type(classIgnore) == "table" and classIgnore[name]) then
+			stats.skipped += 1
+			return
+		end
+		local rule = DecompileIgnore[instance]
+		if rule == nil then
+			local classRule = DecompileIgnore[className]
+			if classRule == true then
+				rule = true
+			elseif type(classRule) == "table" then
+				rule = classRule[name] -- Preserve false: ignore only this node's Source.
 			end
 		end
-				-- getscriptbytecode + dedup HERE, serially on the main thread - exactly like the proven
-		-- upstream ussiprepass. We keep only UNIQUE bytecode; running getscriptbytecode serially
-		-- (NOT concurrently in the workers) is what keeps huge games (Grow a Garden 2) stable.
-		local ok, bc = pcall(getscriptbytecode, o)
-		if ok and type(bc) == "string" and bc ~= "" and not seen[bc] then
-			seen[bc] = true
-			local key = sha384(bc)
-			if ldeccache[key] == nil then
-				jobs[#jobs + 1] = { script = o, bc = (nativeDecompile and nil) or bc, key = key }
-				if maxScripts > 0 and #jobs > maxScripts then
-					overCap = true
-				end
+		local ignoreSource = inheritedIgnored or rule ~= nil
+		local ignoreDescendants = inheritedIgnored or not not rule
+		local override = overrides[instance]
+		if not ignoreSource and not (override and override.__SaveSpecific)
+			and not candidateSeen[instance] and instance:IsA("LuaSourceContainer") then
+			local isLocalScript = instance:IsA("LocalScript")
+			local serverOnly = isLocalScript and instance.RunContext == Enum.RunContext.Server
+				or not isLocalScript and instance:IsA("Script") and instance.RunContext ~= Enum.RunContext.Client
+			-- Serialization recovers LinkedSource first; the prepass never requests it.
+			if not serverOnly and instance.LinkedSource == "" then
+				candidateSeen[instance] = true
+				scripts[#scripts + 1] = instance
+				stats.candidates += 1
+			end
+		end
+		-- IgnoreList[instance] = false preserves the node and prunes its children.
+		if exactIgnore ~= false then
+			local children = override and override.__Children or instance:GetChildren()
+			for index = #children, 1, -1 do
+				stack[#stack + 1] = { children[index], ignoreDescendants }
 			end
 		end
 	end
+	notify()
+	while #stack > 0 do
+		local entry = stack[#stack]
+		stack[#stack] = nil
+		stats.scanned += 1
+		local ok = pcall(inspect, entry[1], entry[2])
+		if not ok then stats.errors += 1 end
+		sinceYield += 1
+		if sinceYield >= 500 or os.clock() - sliceStarted >= 0.008 then
+			notify()
+			task.wait()
+			sliceStarted, sinceYield = os.clock(), 0
+		end
+	end
+	notify()
+	return scripts, stats
+end
 
-	do
-		local scanned = 0
-		for _, o in game:GetDescendants() do
-			if overCap then
-				break
-			end
-			pcall(consider, o)
-			scanned += 1
-			if scanned % 500 == 0 then
-				task.wait() -- yield; getscriptbytecode per script is heavy on big games
-			end
-		end
-	end
-	if not overCap and getloadedmodules then
-		local ok, mods = pcall(getloadedmodules)
-		if ok and type(mods) == "table" then
-			for _, m in mods do
-				if overCap then
-					break
-				end
-				pcall(consider, m)
-			end
-		end
-	end
-
-	local total = #jobs
-	if overCap then
-		print(string.format(
-			"[saveinstance] Prepass SKIPPED — this game has more than %d unique client scripts; pre-decompiling that many via the rate-limited API would take too long. Scripts will still decompile on-demand during the save. Raise PrepassMaxScripts to force it, or use noscripts = true for a structure-only save.",
-			maxScripts
-		))
-		return false, "too many scripts (> " .. maxScripts .. "); using on-demand decompile instead"
-	end
-	print("[saveinstance] Prepass: gathered " .. total .. " unique client scripts to decompile")
-	if total == 0 then
-		return true
-	end
-
-	-- Bounded cooperative concurrency (Lua coroutines don't preempt mid-statement, so the
-	-- shared counters are safe without locks).
-	local nextIndex, done, active = 0, 0, math.min(concurrency, total)
-	local prepassStart = os.clock()
-	for _ = 1, active do
-		task.spawn(function()
-			pcall(function() -- guard: a throw here must NOT skip `active -= 1`, or the wait below hangs forever
-				while true do
-					nextIndex += 1
-					local job = jobs[nextIndex]
-					if not job then
-						return
-					end
-					-- Workers ONLY do the HTTP decompile (getscriptbytecode + dedup already happened serially
-					-- in the gather). No concurrent getscriptbytecode = stable on huge games.
-					local body
-						if nativeDecompile then
-							-- the executor's own decompiler (Volt etc.) - no external API. Synchronous/CPU-heavy,
-							-- so yield every few scripts so it does not freeze.
-							local okd, r = pcall(nativeDecompile, job.script)
-							if okd and type(r) == "string" then body = r end
-							if nextIndex % 8 == 0 then task.wait() end
-						else
-							body = decompile_via_api(job.bc, apiUrl, rateGap)
-						end
-					if body and body ~= "" then
-						ldeccache[job.key] = (string.gsub(body, "\0", "\\0"))
-					end
-					done += 1
-					if report then
-						local elapsed = os.clock() - prepassStart
-						local eta
-						if done > 0 and elapsed > 0.5 then
-							eta = (total - done) * (elapsed / done)
-						end
-						report(done, total, eta)
-					end
-				end
-			end)
-			active -= 1
-		end)
-	end
-	while active > 0 do
-		task.wait(0.1)
-	end
-	dbg("[prepass] scripts:", total, "| decompiled OK:", _api_ok, "| failed:", _api_fail, "| in", string.format("%.1fs", os.clock() - prepassStart))
-	if _api_first_fail then
-		dbg("[prepass] first API failure:", _api_first_fail)
-	end
-	return true
+local function RunDecompilePrepass(cache, O, report, provider, backend, roots, ignores, decompileIgnores, overrides, ignoreNotArchivable)
+    if not (getscriptbytecode and sha384) then return false, "bytecode API unavailable" end
+    local scripts = GatherDecompileScripts(roots, ignores, decompileIgnores, ignoreNotArchivable, overrides)
+    local jobs, seen, cached = {}, {}, 0
+    local maxScripts = tonumber(O.PrepassMaxScripts) or 6000
+    local started = os.clock()
+    for _, script in scripts do
+        local ok, bc = pcall(getscriptbytecode, script)
+        if ok and type(bc) == "string" and bc ~= "" then
+            local key = sha384(bc)
+            if not seen[key] then
+                seen[key] = true
+                if cache[key] then cached += 1
+                else
+                    jobs[#jobs + 1] = {script=script, key=key, name=script:GetFullName()}
+                    if maxScripts > 0 and #jobs > maxScripts then
+                        return false, "script cap exceeded; using on-demand decompilation"
+                    end
+                end
+            end
+        end
+        if os.clock() - started >= 0.008 then task.wait(); started = os.clock() end
+    end
+    local stats = RunDecompileJobs(jobs, {
+        concurrency=O.PrepassConcurrency, timeout=O.timeout, maxTime=O.PrepassMaxTime,
+    }, function(job)
+        if provider then return provider(job.script) end
+        local bc = getscriptbytecode(job.script)
+        return decompile_via_api(bc, O.PrepassApiUrl, O.PrepassRateGap)
+    end, function(job, result)
+        if result.status == "succeeded" then
+            local source = string.gsub(result.source, "\0", "\\0")
+            cache[job.key] = source
+            rememberDecompiler(cache, job.key, source, backend)
+        end
+    end, function(progress)
+        progress.cached = cached
+        if report then report(progress) end
+    end)
+    dbg("[prepass]", backend, "ok:", stats.succeeded, "failed:", stats.failed,
+        "cached:", cached, "seconds:", stats.elapsed, "aborted:", stats.aborted)
+    return not stats.aborted, stats.reason, stats
 end
 
 -- Reports executor capabilities that affect the save so the user knows up front WHY a save might
@@ -2307,8 +2525,8 @@ local function neutralize_lighting()
 	end)
 end
 
--- After the streaming sweep, terrain keeps loading in the background. Poll SmoothGrid's size until it
--- stops growing (or maxWait) so the re-capture grabs the FULL terrain instead of floating-island gaps.
+-- Observe terrain byte length until it stabilizes or maxWait expires.
+-- Equal byte lengths do not prove identical contents or complete terrain coverage.
 local function wait_terrain_loaded(terrainGHP, maxWait)
 	local lastSize, stable = -1, 0
 	local deadline = os.clock() + maxWait
@@ -2484,6 +2702,7 @@ local function synsaveinstance(CustomOptions, CustomOptions2)
 		'<roblox version="4">'
 
 	local StatusText
+	local StopElapsedClock
 	local ProgressFill -- * Progress-bar fill frame (created in the ShowStatus block below)
 	local saved_count, total_count = 0, 0 -- * Instances serialized vs. estimated total, for the progress bar
 
@@ -2502,6 +2721,7 @@ local function synsaveinstance(CustomOptions, CustomOptions2)
 		-- MaxThreads = 3 -- Description: The number of decompilation threads that can run at once. More threads means it can decompile for scripts at a time.
 		-- DisableCompression = false, --Description: Disables compression in the binary output
 
+		DecompilerName = false, -- Optional display name for the installed decompile() hook; does not select a provider.
 		DecompileJobless = false,
 		DecompileIgnore = { -- * Clean these up (merged Old Syn and New Syn)
 			-- "Chat",
@@ -2571,15 +2791,21 @@ local function synsaveinstance(CustomOptions, CustomOptions2)
 		-- * Detailed debug log written to saveinstance-debug.txt in the executor workspace (share it for diagnosis)
 		Debug = false,
 
-		-- * Map streaming: force-load a StreamingEnabled map before saving so the WHOLE map is captured (not just chunks near you)
+		-- * Request a configured area before saving; see debug log for completion/retention observations.
 		SetStreaming = false,
 		StreamingAreaSize = 10000, -- studs (square) swept around your start position
-		StreamingRadius = 1024, -- per-request radius; auto-uses the game's StreamingTargetRadius when readable
+		StreamingRadius = 512, -- grid spacing, not a radius passed to the engine
+		StreamingCenter = false, -- Vector3; false uses the character position
+		StreamingPasses = 1,
+		StreamingRequireComplete = true, -- abort export if any request fails or the sweep is incomplete
 		StreamingTimeout = 20, -- seconds per RequestStreamAroundAsync request
-		StreamingConcurrency = false, -- requests in flight at once; false = AUTO-scale to the map/grid size
+		StreamingConcurrency = 4, -- actual awaited requests in flight (maximum 8)
 		StreamingSlices = 2, -- vertical layers (raise for tall maps)
 		StreamingMaxTime = false, -- overall seconds cap for the streaming sweep; false = AUTO-scale to the grid size (bigger maps get a longer cap). Set a number to force it.
-		StreamingChunkWait = 12, -- max seconds to wait for ONE chunk to finish loading; the sweep waits until a region stops gaining parts (stability), so it usually returns sooner. Raise for very dense maps.
+		StreamingCancel = false, -- optional callback; return true to abort streaming without exporting
+		StreamingPoints = false, -- optional Vector3 array replacing the grid
+		StreamingValidate = false, -- optional coverage callback returning true, or false and a reason
+		StreamingChunkWait = 6, -- observation cap after each awaited request; count stability is not proof of completeness
 		StreamingSettleTime = 5, -- seconds to wait after the sweep for in-flight background terrain/loads to finish before saving (also caps the post-sweep terrain-stabilization wait)
 
 		-- * NeutralizeLighting: reset Lighting/Atmosphere/post-effects to clean midday so the saved place opens BRIGHT instead of dark/foggy/night (the "all grey on the camera" look). Default false keeps the game's real lighting.
@@ -2588,9 +2814,10 @@ local function synsaveinstance(CustomOptions, CustomOptions2)
 		-- * ExportObj: also write a world-space .obj of all MeshPart geometry (recovered via EditableMesh) next to the save, so PRIVATE meshes that show as grey boxes in Studio can be recovered/viewed in Blender. Pair with SetStreaming. Large on big maps.
 		ExportObj = false,
 
-		-- * Decompilation prepass: parallel-decompile all client scripts via an external API before saving (big speedup on script-heavy games). RISKY: sends script bytecode to a third-party API.
+		-- * Decompilation prepass: decompile eligible exported scripts through the selected provider before serialization.
 		DecompilePrepass = false,
-		PrepassConcurrency = 24, -- parallel decompile requests kept in flight
+		PrepassConcurrency = 4, -- parallel decompile requests kept in flight
+		PrepassMaxTime = 300, -- overall worker deadline in seconds
 		PrepassRateGap = 0.12, -- min seconds between API requests (lua.expert rejects unthrottled bursts). Lower = faster if the API allows.
 		PrepassApiUrl = "https://api.lua.expert/decompile",
 		PrepassMaxScripts = 6000, -- upper safety bound: only skip the prepass on truly enormous games (the gather is now cheap and decompiles are rate-limited, so this guards against an absurdly long run, not a crash). On-demand decompile takes over if exceeded.
@@ -2681,6 +2908,8 @@ local function synsaveinstance(CustomOptions, CustomOptions2)
 				CustomOptions.Object = tmp
 			elseif Type == "table" and typeof(tmp[1]) == "Instance" then
 				CustomOptions.ExtraInstances = tmp
+				-- A two-argument instance list is scoped just like the one-argument form.
+				OPTIONS.mode = "invalidmode"
 				OPTIONS.IsModel = true
 			end
 		end
@@ -2751,6 +2980,11 @@ local function synsaveinstance(CustomOptions, CustomOptions2)
 	ArrayToDict(OPTIONS.IgnoreProperties),
 	ArrayToDict(OPTIONS.NotCreatableFixes, true, "Folder")
 
+	if OPTIONS.SetStreaming and OPTIONS.SafeMode then
+		GLOBAL_ENV.USSI = nil
+		error("SetStreaming requires SafeMode=false so the client remains connected")
+	end
+
 	local __DEBUG_MODE = OPTIONS.__DEBUG_MODE
 
 	if __DEBUG_MODE and type(__DEBUG_MODE) ~= "function" then
@@ -2771,8 +3005,8 @@ local function synsaveinstance(CustomOptions, CustomOptions2)
 	local IgnorePropertiesOfNotScriptsOnScriptsMode = OPTIONS.IgnorePropertiesOfNotScriptsOnScriptsMode
 
 	_api_ok, _api_fail, _api_first_fail, _api_warned = 0, 0, nil, false -- reset decompile counters/warn each run
-	if OPTIONS.Debug then -- start the debug log (written to saveinstance-debug.txt at the end)
-		debug_enabled = true
+	debug_enabled = OPTIONS.Debug == true
+	if debug_enabled then -- persist the log from the first checkpoint onward
 		table.clear(debug_log)
 		debug_clock0 = os.clock()
 		dbg("=== saveinstance debug log ===")
@@ -2804,6 +3038,11 @@ local function synsaveinstance(CustomOptions, CustomOptions2)
 	local IgnoreSharedStrings = OPTIONS.IgnoreSharedStrings
 	local SharedStringOverwrite = OPTIONS.SharedStringOverwrite
 
+	local NativeDecompiler, DecompilerName = selectDecompiler(OPTIONS)
+	local DecompilerStatus = OPTIONS.noscripts and "Disabled" or (OPTIONS.DecompileJobless and "Cache only"
+		or ((NativeDecompiler or ((request or http_request) and base64encode and getscriptbytecode)) and DecompilerName or "Unavailable"))
+	print("[saveinstance] Decompiler: " .. DecompilerStatus)
+	dbg("[decompile] selected backend:", DecompilerStatus)
 	local ldeccache = GLOBAL_ENV.scriptcache
 
 	local DecompileIgnoring, ToSaveList, ldecompile, placename, elapse_t, SaveNotCreatableWillBeEnabled, RecoveredScripts
@@ -2831,15 +3070,22 @@ local function synsaveinstance(CustomOptions, CustomOptions2)
 		local mode = string.lower(OPTIONS.mode)
 		local tmp = table.clone(OPTIONS.ExtraInstances)
 
-		local PlaceName = game.PlaceId
-
-		pcall(function()
-			PlaceName ..= " " .. service.MarketplaceService:GetProductInfo(PlaceName).Name
-		end)
-
-		local function sanitizeFileName(str)
-			return string.sub(string.gsub(string.gsub(string.gsub(str, "[^%w _]", ""), " +", " "), " +$", ""), 1, 240)
-		end
+        local PlaceName = "Place"
+        pcall(function()
+            local name = service.MarketplaceService:GetProductInfo(game.PlaceId).Name
+            if type(name) == "string" and name ~= "" then PlaceName = name end
+        end)
+        local now = DateTime.now().UnixTimestampMillis
+        local stamp = os.date("!%Y-%m-%d_%H-%M-%S", math.floor(now / 1000))
+            .. string.format("-%03d UTC", now % 1000)
+        local function automaticFileName(modelName)
+            local name = PlaceName .. (modelName and (" - model " .. modelName) or "")
+            -- Preserve Unicode names while removing Windows filename separators.
+            name = name:gsub('[%c<>:"/\\|?*]', ""):gsub("^%s+", ""):gsub("[%s%.]+$", "")
+            if #name > 140 then name = name:sub(1, utf8.offset(name, 0, 141) - 1) end
+            if name == "" then name = "Place" end
+            return name .. " - " .. tostring(game.PlaceId) .. " - " .. stamp
+        end
 
 		if ToSaveInstance then
 			if mode == "optimized" then -- ! NOT supported with Model file mode
@@ -2864,10 +3110,10 @@ local function synsaveinstance(CustomOptions, CustomOptions2)
 		if IsModel then
 			placename = (
 				FilePath
-					or sanitizeFileName("model " .. PlaceName .. " " .. (ToSaveInstance or tmp[1] or game):GetFullName())
+					or automaticFileName((ToSaveInstance or tmp[1] or game):GetFullName())
 			) .. ".rbxmx"
 		else
-			placename = (FilePath or sanitizeFileName("place " .. PlaceName)) .. ".rbxlx"
+			placename = (FilePath or automaticFileName()) .. ".rbxlx"
 		end
 
 		if GLOBAL_ENV[placename] then
@@ -3079,6 +3325,7 @@ local function synsaveinstance(CustomOptions, CustomOptions2)
 		end
 	end
 
+	local prepassStopped
 	local getbytecode
 	if getscriptbytecode then
 		getbytecode = construct_TimeoutHandler(3, getscriptbytecode) -- ? Solara fix
@@ -3096,7 +3343,7 @@ local function synsaveinstance(CustomOptions, CustomOptions2)
 	end
 
 	do
-		local Decompiler = decompile --OPTIONS.decomptype == "custom" and custom_decompiler or decompile or custom_decompiler
+		local Decompiler = NativeDecompiler
 
 		-- if Decompiler == custom_decompiler then -- Cope
 		-- 	local key = "DecompileTimeout"
@@ -3111,7 +3358,7 @@ local function synsaveinstance(CustomOptions, CustomOptions2)
 
 		if OPTIONS.noscripts then
 			ldecompile = function()
-				return "-- Decompiling is disabled"
+				return "-- Decompiling is disabled", "None (disabled)"
 			end
 		elseif Decompiler then
 			local decomp = construct_TimeoutHandler(Timeout, Decompiler, "Decompiler timed out")
@@ -3125,7 +3372,7 @@ local function synsaveinstance(CustomOptions, CustomOptions2)
 
 					if s then
 						if not bytecode or bytecode == "" then
-							return "-- The Script is Empty"
+							return "-- The Script is Empty", "None (empty bytecode)"
 						end
 						hashed_bytecode = sha384(bytecode)
 						cached = ldeccache[hashed_bytecode]
@@ -3135,19 +3382,18 @@ local function synsaveinstance(CustomOptions, CustomOptions2)
 						if __DEBUG_MODE then
 							__DEBUG_MODE("Found in Cache", script:GetFullName())
 						end
-						return cached
+						return cached, cachedDecompiler(ldeccache, hashed_bytecode, cached)
 					end
 				else
-					if DecompileJobless then
-						return "-- Not found in already decompiled ScriptCache"
-					end
 
 					task.wait() -- TODO Maybe remove?
 				end
 
-				local ok, result = run_with_loading("Decompiling " .. script.Name, true, nil, decomp, script)
-				if not result then
-					ok, result = false, "Empty Output"
+				if prepassStopped then return "-- Decompilation stopped after prepass failure", "None (prepass stopped)" end
+				if DecompileJobless then return "-- Not found in already decompiled ScriptCache", "None (cache miss)" end
+				local ok, result = run_with_loading("Decompiling [" .. DecompilerName .. "] " .. script.Name, true, nil, decomp, script)
+				if type(result) ~= "string" or result == "" then
+					ok, result = false, "Empty or invalid output"
 				end
 
 				local output
@@ -3158,14 +3404,15 @@ local function synsaveinstance(CustomOptions, CustomOptions2)
 					output = "--[[ Failed to decompile. Reason:\n" .. (result or "") .. "\n]]"
 				end
 
-				if ScriptCache and hashed_bytecode then -- TODO there might(?) be an edgecase where it manages to decompile (built-in) even though getscriptbytecode failed, and the output won't get cached
-					ldeccache[hashed_bytecode] = output -- ? Should we cache even if it timed out?
+				if ok and ScriptCache and hashed_bytecode then -- Do not cache transient failures/timeouts as successful source.
+					ldeccache[hashed_bytecode] = output
+					rememberDecompiler(ldeccache, hashed_bytecode, output, DecompilerName)
 					if __DEBUG_MODE then
 						__DEBUG_MODE("Cached", script:GetFullName())
 					end
 				end
 
-				return output
+				return output, DecompilerName .. (ok and "" or " (failed)")
 			end
 		else
 			-- No executor decompiler -> fall back to the external API (lua.expert), using ldeccache.
@@ -3198,20 +3445,24 @@ local function synsaveinstance(CustomOptions, CustomOptions2)
 					local hashed = sha384(bytecode)
 					local cached = ldeccache and ldeccache[hashed]
 					if cached then
-						return cached
+						return cached, cachedDecompiler(ldeccache, hashed, cached)
 					end
+					if prepassStopped then return "-- Decompilation stopped after prepass failure", "None (prepass stopped)" end
+				if DecompileJobless then return "-- Not found in already decompiled ScriptCache", "None (cache miss)" end
 					if canApi then
 						local body = decompile_via_api(bytecode, OPTIONS.PrepassApiUrl, OPTIONS.PrepassRateGap)
 						if body and body ~= "" then
 							body = (string.gsub(body, "\0", "\\0")) -- null bytes break the XML file
 							if ldeccache then
 								ldeccache[hashed] = body
+								rememberDecompiler(ldeccache, hashed, body, DecompilerName)
 							end
-							return body
+							return body, DecompilerName
 						end
+						return "-- Failed to decompile using the configured API", DecompilerName .. " (failed)"
 					end
 				end
-				return "-- Your Executor does NOT have a Decompiler"
+				return "-- Decompiler or readable bytecode unavailable", "None (unavailable)"
 			end
 		end
 	end
@@ -3327,12 +3578,19 @@ local function synsaveinstance(CustomOptions, CustomOptions2)
 	local function ReturnItem(className, instance)
 		--return '<Item class="' .. className .. '" referent="' .. GetRef(instance) .. '"><Properties>' -- TODO: Ideally this shouldn't return <Properties> as well as the line below to close it IF  IgnorePropertiesOfNotScriptsOnScriptsMode is Enabled OR If all properties are default (reduces file size by at least 1.4%)
 		local itemstring = '<Item class="' .. className .. '" referent="' .. GetRef(instance) .. '"><Properties>'
-		if className == "Terrain" and realcheck then
-			itemstring = itemstring ..
-				'<BinaryString name="PhysicsGrid"><![CDATA[' .. getfenv().physicsgrid .. ']]></BinaryString>' ..
-				'<BinaryString name="SmoothGrid"><![CDATA[' .. getfenv().smoothgrid .. ']]></BinaryString>'
+		local snapshotProperties
+		if className == "Terrain" and realcheck and not OPTIONS.IgnoreSpecialProperties then
+			local environment = getfenv()
+			for _, propertyName in { "PhysicsGrid", "SmoothGrid" } do
+				local snapshot = environment[string.lower(propertyName)]
+				if not IgnoreProperties[propertyName] and type(snapshot) == "string" then
+					itemstring ..= '<BinaryString name="' .. propertyName .. '"><![CDATA[' .. snapshot .. ']]></BinaryString>'
+					snapshotProperties = snapshotProperties or {}
+					snapshotProperties[propertyName] = true
+				end
+			end
 		end
-		return itemstring
+		return itemstring, snapshotProperties
 	end
 
 	local function ReturnProperty(tag, propertyName, value)
@@ -3378,6 +3636,25 @@ local function synsaveinstance(CustomOptions, CustomOptions2)
 
 	local CHUNK_LIMIT = 200 * 1024 * 1024 -- string length overflow prevention
 	local last_save_yield = 0
+	local last_progress_log = 0
+	local function yield_save_work()
+		local now = os.clock()
+		if now - last_save_yield < 0.008 then
+			return
+		end
+		if StatusText then
+			StatusText.Text = "Saving instances: " .. saved_count .. " (" .. get_size_format() .. ")"
+			if ProgressFill and total_count > 0 then
+				ProgressFill.Size = UDim2.new(math.clamp(saved_count / total_count, 0, 0.99), 0, 1, 0)
+			end
+		end
+		if debug_enabled and now - last_progress_log >= 2 then
+			last_progress_log = now
+			dbg("[serialize] instances=", saved_count, "| buffered bytes=", totalsize)
+		end
+		task.wait()
+		last_save_yield = os.clock()
+	end
 	local function save_cache(final)
 		local savestr = table.concat(savebuffer)
 		currentparts[#currentparts + 1] = savestr -- * O(1) append; the chunk string is built once at the boundary below (was `currentstr ..= savestr`, which rebuilt the whole string each call -> O(n^2) + "not enough memory")
@@ -3397,20 +3674,7 @@ local function synsaveinstance(CustomOptions, CustomOptions2)
 			currentsize = 0
 		end
 
-		local now = os.clock()
-		-- Yield to keep the client responsive, but time-gated: this used to wait a FULL render
-		-- frame on EVERY ~55KB flush (thousands of frames on a big save = the main slowdown).
-		-- Now we yield + refresh the UI only ~every 30ms of work, independent of flush count.
-		if now - last_save_yield > 0.03 then
-			last_save_yield = now
-			if StatusText then
-				StatusText.Text = "Saving instances: " .. saved_count .. " (" .. get_size_format() .. ")"
-				if ProgressFill and total_count > 0 then
-					ProgressFill.Size = UDim2.new(math.clamp(saved_count / total_count, 0, 0.99), 0, 1, 0)
-				end
-			end
-			wait_for_render()
-		end
+		yield_save_work()
 	end
 
 	local function save_specific(className, properties)
@@ -3423,7 +3687,7 @@ local function synsaveinstance(CustomOptions, CustomOptions2)
 			-- TODO: Improve all sort of overrides & exceptions in the code (code below is awful)
 			if "Source" == propertyName then
 				tag = "ProtectedString"
-				value = XML_Descriptors.__PROTECTEDSTRING(val)
+				value = XML_Descriptors.__PROTECTEDSTRING(savedSourceHeader(val, "None (provided source)"))
 				whitelisted = true
 			elseif "Name" == propertyName then
 				whitelisted = true
@@ -3440,6 +3704,7 @@ local function synsaveinstance(CustomOptions, CustomOptions2)
 
 	local function save_hierarchy(hierarchy)
 		for _, instance in hierarchy do
+			yield_save_work()
 			if IgnoreNotArchivable and not instance.Archivable then
 				continue
 			end
@@ -3515,7 +3780,8 @@ local function synsaveinstance(CustomOptions, CustomOptions2)
 				savebuffer_size += 1
 			else
 				-- local Properties =
-				savebuffer[savebuffer_size] = ReturnItem(ClassTagOverride or ClassName, instance) -- TODO: Ideally this shouldn't return <Properties> as well as the line below to close it IF  IgnorePropertiesOfNotScriptsOnScriptsMode is ENABLED
+				local item, snapshotProperties = ReturnItem(ClassTagOverride or ClassName, instance)
+				savebuffer[savebuffer_size] = item -- TODO: Ideally this shouldn't return <Properties> as well as the line below to close it IF  IgnorePropertiesOfNotScriptsOnScriptsMode is ENABLED
 				savebuffer_size += 1
 				saved_count += 1 -- * Progress bar: one more instance serialized
 				if not (IgnorePropertiesOfNotScriptsOnScriptsMode and not isLuaSourceContainer(instance)) then
@@ -3556,9 +3822,15 @@ local function synsaveinstance(CustomOptions, CustomOptions2)
 						end
 					end
 					for _, Property in proplist do
+						yield_save_work()
 						local PropertyName = Property.Name
 
 						if IgnoreProperties[PropertyName] then
+							continue
+						end
+						-- Keep the captured Terrain snapshot authoritative. A second live read can
+						-- differ after stream-out and would emit a duplicate XML property.
+						if snapshotProperties and snapshotProperties[PropertyName] then
 							continue
 						end
 
@@ -3674,9 +3946,10 @@ local function synsaveinstance(CustomOptions, CustomOptions2)
 										if DecompileIgnoring == 1 then
 											DecompileIgnoring = nil
 										end
-										value = "-- Ignored"
+										value = savedSourceHeader("-- Ignored", "None (ignored)")
 									else
 										local should_decompile = true
+										local sourceDecompiler = "None (original linked source)"
 										local LinkedSource
 										local LinkedSource_Url = instance.LinkedSource -- ! Assuming every Class that has ProtectedString Source property also has a LinkedSource property
 										local hasLinkedSource = LinkedSource_Url ~= ""
@@ -3700,6 +3973,7 @@ local function synsaveinstance(CustomOptions, CustomOptions2)
 												if should_decompile then
 													if DecompileJobless then
 														value = "-- Not found in LinkedSource ScriptCache"
+														sourceDecompiler = "None (linked-source cache miss)"
 														should_decompile = nil
 													end
 
@@ -3742,9 +4016,10 @@ local function synsaveinstance(CustomOptions, CustomOptions2)
 												and instance:IsA("Script")
 												and instance.RunContext ~= Enum.RunContext.Client
 											then
+												sourceDecompiler = "None (server-only source unavailable)"
 												value = "-- [FilteringEnabled] Server Scripts are IMPOSSIBLE to save" -- TODO: Could be not just server scripts in the future
 											else
-												value = ldecompile(instance)
+												value, sourceDecompiler = ldecompile(instance)
 												if SaveBytecode then
 													local output = SaveBytecode(instance)
 													if output then
@@ -3754,9 +4029,9 @@ local function synsaveinstance(CustomOptions, CustomOptions2)
 											end
 										end
 
-										value = ""
-											.. (hasLinkedSource and "-- Original Source: https://assetdelivery.roblox.com/v1/asset/?" .. (LinkedSource_type or "id") .. "=" .. (LinkedSource or LinkedSource_Url) .. "\n\n" or "")
-											.. value
+										value = savedSourceHeader(
+											(hasLinkedSource and "-- Original Source: https://assetdelivery.roblox.com/v1/asset/?" .. (LinkedSource_type or "id") .. "=" .. (LinkedSource or LinkedSource_Url) .. "\n\n" or "")
+											.. value, sourceDecompiler)
 									end
 								end
 								value = XML_Descriptors.__PROTECTEDSTRING(value)
@@ -3834,7 +4109,7 @@ local function synsaveinstance(CustomOptions, CustomOptions2)
 				header ..= '<Meta name="ExplicitAutoJoints">true</Meta>'
 			end
 
-			writefile(placename, header) -- TODO This is sort of useless if writefile will be used at the end (like if AlternativeWritefile and Callback are unused)
+			-- Do not create an output file until serialization has completed.
 		end
 
 		-- TODO Find a better solution for this
@@ -4044,6 +4319,7 @@ local function synsaveinstance(CustomOptions, CustomOptions2)
 				end
 				Callback(totalstr, chunks, totalsize)
 			elseif OPTIONS.AlternativeWritefile and appendfile then
+				writefile(placename, header) -- Initialize segmented output only after all XML is ready.
 				local SEGMENT_SIZE = 4145728 -- Celery has an arbitrary savefile/appendfile size limit of ~4MB for reasons unknown. This is a workaround to save the file in segments.
 
 				local totallen, currentlen = math.ceil(totalsize / SEGMENT_SIZE), 1
@@ -4161,25 +4437,177 @@ local function synsaveinstance(CustomOptions, CustomOptions2)
 
 		StatusText.Text = "Saving..."
 
-		StatusText.BackgroundTransparency = 1
+		StatusText.BackgroundTransparency = 0.08
+		StatusText.BackgroundColor3 = Color3.fromRGB(20, 24, 33)
+		StatusText.BorderSizePixel = 0
 		StatusText.Font = Enum.Font.Code
-		StatusText.AnchorPoint = Vector2.new(1)
-		StatusText.Position = UDim2.new(1)
-		StatusText.Size = UDim2.new(0.3, 0, 0, 20)
+		StatusText.AnchorPoint = Vector2.new(0.5, 0.5)
+		StatusText.Position = UDim2.fromScale(0.5, 0.5)
+		StatusText.Size = UDim2.new(0.85, 0, 0, 180)
+		local SizeLimit = Instance.new("UISizeConstraint")
+		SizeLimit.MaxSize = Vector2.new(680, 180)
+		SizeLimit.Parent = StatusText
+		local Corner = Instance.new("UICorner")
+		Corner.CornerRadius = UDim.new(0, 12)
+		Corner.Parent = StatusText
 
 		StatusText.TextColor3 = Color3.new(1, 1, 1)
-		StatusText.TextScaled = true
+		StatusText.TextScaled = false
+		StatusText.TextSize = 17
+		StatusText.TextWrapped = true
 		StatusText.TextStrokeTransparency = 0.7
-		StatusText.TextXAlignment = Enum.TextXAlignment.Right
-		StatusText.TextYAlignment = Enum.TextYAlignment.Top
+		StatusText.TextXAlignment = Enum.TextXAlignment.Center
+		StatusText.TextYAlignment = Enum.TextYAlignment.Center
 
 		StatusText.Parent = StatusGui
+		local BackendText = Instance.new("TextLabel")
+		BackendText.BackgroundTransparency = 1
+		BackendText.Font = Enum.Font.GothamBold
+		BackendText.TextSize = 18
+		BackendText.TextColor3 = Color3.fromRGB(125, 194, 255)
+		BackendText.Name = "DecompilerBackend"
+		BackendText.Position = UDim2.new(0, 16, 0, 12)
+		BackendText.AnchorPoint = Vector2.new(0, 0)
+		BackendText.Size = UDim2.new(1, -32, 0, 24)
+		BackendText.Text = "Selected decompiler: " .. DecompilerStatus
+		BackendText.Parent = StatusText
+
+		-- A separate label keeps ticking even when a decompiler call is waiting.
+		local ElapsedText = Instance.new("TextLabel")
+		ElapsedText.Name = "ElapsedTime"
+		ElapsedText.BackgroundTransparency = 1
+		ElapsedText.Font = Enum.Font.Code
+		ElapsedText.TextSize = 16
+		ElapsedText.TextColor3 = Color3.fromRGB(220, 229, 238)
+		ElapsedText.Position = UDim2.new(0, 16, 1, -51)
+		ElapsedText.Size = UDim2.new(1, -32, 0, 24)
+		ElapsedText.Text = "Elapsed: 00:00:00"
+		ElapsedText.Parent = StatusText
+		local clockStarted = os.clock()
+		local lastSecond = -1
+		local clockConnection, destroyConnection
+		local function updateElapsedClock()
+			local seconds = math.max(0, math.floor(os.clock() - clockStarted))
+			if seconds ~= lastSecond then
+				lastSecond = seconds
+				ElapsedText.Text = string.format("Elapsed: %02d:%02d:%02d",
+					math.floor(seconds / 3600), math.floor(seconds / 60) % 60, seconds % 60)
+			end
+		end
+		StopElapsedClock = function()
+			updateElapsedClock()
+			if clockConnection then clockConnection:Disconnect(); clockConnection = nil end
+			if destroyConnection then destroyConnection:Disconnect(); destroyConnection = nil end
+		end
+		clockConnection = RunService.Heartbeat:Connect(updateElapsedClock)
+		destroyConnection = StatusText.Destroying:Connect(StopElapsedClock)
+
+		-- BEGIN PROMO BANNER
+		local promos = {
+			{"Sir Meme Hub", "Explore the script hub", "https://sirmemehub.com/", Color3.fromRGB(173, 211, 126)},
+			{"RobloxScripts", "Upload, share and find scripts with users from around the world.", "https://robloxscripts.com/", Color3.fromRGB(125, 194, 255)},
+			{"ScriptDumper", "Inspect a script before running it", "https://scriptdumper.com/", Color3.fromRGB(198, 165, 255)},
+			{"ExploitStrap", "A Windows bootstrapper for people using executors and externals.", "https://exploitstrap.com/", Color3.fromRGB(255, 190, 125)},
+			{"SirMeme on YouTube", "Watch the channel", "https://www.youtube.com/@RealMrExploit-f5h", Color3.fromRGB(255, 137, 137)},
+		}
+		local banner = Instance.new("Frame")
+		banner.Name = "PromoBanner"
+		banner.Position = UDim2.new(0, 0, 1, 10)
+		banner.Size = UDim2.new(1, 0, 0, 140)
+		banner.BackgroundColor3 = Color3.fromRGB(20, 24, 33)
+		banner.BackgroundTransparency = 0.06
+		banner.BorderSizePixel = 0
+		banner.Parent = StatusText
+		local round = Instance.new("UICorner")
+		round.CornerRadius = UDim.new(0, 12)
+		round.Parent = banner
+		local function promoLabel(name, y, height, size)
+			local label = Instance.new("TextLabel")
+			label.Name = name
+			label.BackgroundTransparency = 1
+			label.Position = UDim2.fromOffset(14, y)
+			label.Size = UDim2.new(1, -28, 0, height)
+			label.Font = Enum.Font.Gotham
+			label.TextSize = size
+			label.TextXAlignment = Enum.TextXAlignment.Left
+			label.TextColor3 = Color3.fromRGB(215, 224, 234)
+			label.TextTruncate = Enum.TextTruncate.AtEnd
+			label.Parent = banner
+			return label
+		end
+		local heading = promoLabel("PromoHeading", 9, 16, 11)
+		heading.Size = UDim2.new(1, -64, 0, 16)
+		local dismiss = Instance.new("TextButton")
+		dismiss.Name = "DismissPromo"
+		dismiss.BackgroundTransparency = 1
+		dismiss.Position = UDim2.new(1, -38, 0, 2)
+		dismiss.Size = UDim2.fromOffset(32, 32)
+		dismiss.Font = Enum.Font.Gotham
+		dismiss.TextSize = 22
+		dismiss.TextColor3 = Color3.fromRGB(160, 172, 187)
+		dismiss.Text = utf8.char(0xD7)
+		dismiss.Parent = banner
+		dismiss.Activated:Connect(function() banner:Destroy() end)
+		local title = promoLabel("PromoTitle", 29, 23, 18)
+		title.Font = Enum.Font.GothamBold
+		local description = promoLabel("PromoDescription", 54, 40, 13)
+		description.TextTruncate = Enum.TextTruncate.None
+		description.TextWrapped = true
+		local link = Instance.new("TextLabel")
+		link.Name = "PromoURL"
+		link.BackgroundTransparency = 1
+		link.Position = UDim2.fromOffset(14, 104)
+		link.Size = UDim2.new(1, -128, 0, 24)
+		link.Font = Enum.Font.Code
+		link.TextSize = 12
+		link.TextColor3 = Color3.fromRGB(215, 224, 234)
+		link.TextXAlignment = Enum.TextXAlignment.Left
+		link.Parent = banner
+		local copy = Instance.new("TextButton")
+		copy.Name = "CopyPromoLink"
+		copy.Position = UDim2.new(1, -106, 0, 100)
+		copy.Size = UDim2.fromOffset(92, 30)
+		copy.BackgroundColor3 = Color3.fromRGB(48, 61, 78)
+		copy.TextColor3 = Color3.new(1, 1, 1)
+		copy.Font = Enum.Font.GothamBold
+		copy.TextSize = 12
+		copy.Text = "Copy URL"
+		copy.Parent = banner
+		local index, nextRotation = 1, os.clock() + 8
+		local function showPromo()
+			local promo = promos[index]
+			heading.Text = "FROM SIRMEME"
+			title.Text, title.TextColor3 = promo[1], promo[4]
+			description.Text, link.Text = promo[2], promo[3]
+			copy.Text = "Copy URL"
+		end
+		showPromo()
+		copy.Activated:Connect(function()
+			local clipboard = global_container.setclipboard or global_container.toclipboard or global_container.set_clipboard
+			local ok = type(clipboard) == "function" and pcall(clipboard, promos[index][3])
+			if ok then
+				copy.Text = "Copied!"
+			else
+				copy.Text = "Unavailable"
+				warn("[saveinstance] This executor could not copy the URL to the clipboard.")
+			end
+			nextRotation = os.clock() + 8
+		end)
+		local promoConnection = RunService.Heartbeat:Connect(function()
+			if os.clock() >= nextRotation then
+				index = index % #promos + 1
+				nextRotation = os.clock() + 8
+				showPromo()
+			end
+		end)
+		banner.Destroying:Connect(function() promoConnection:Disconnect() end)
+		-- END PROMO BANNER
 
 		do -- * Save progress bar: a thin track + fill, just under the status text. Parented to StatusText so it's destroyed together with it.
 			local ProgressTrack = Instance.new("Frame")
 			ProgressTrack.AnchorPoint = Vector2.new(0, 0)
-			ProgressTrack.Position = UDim2.new(0, 0, 1, 2)
-			ProgressTrack.Size = UDim2.new(1, 0, 0, 6)
+			ProgressTrack.Position = UDim2.new(0, 18, 1, -20)
+			ProgressTrack.Size = UDim2.new(1, -36, 0, 7)
 			ProgressTrack.BackgroundColor3 = Color3.new(0, 0, 0)
 			ProgressTrack.BackgroundTransparency = 0.5
 			ProgressTrack.BorderSizePixel = 0
@@ -4192,7 +4620,8 @@ local function synsaveinstance(CustomOptions, CustomOptions2)
 			ProgressFill.Parent = ProgressTrack
 
 			-- Estimated denominator (actual saved count is usually a bit lower due to filtering, so the bar is clamped below 100% until the final "Saved!")
-			total_count = #(ToSaveInstance or game):GetDescendants()
+			total_count = 0
+			for _, root in ToSaveList do total_count += 1 + #root:GetDescendants() end
 		end
 
 		local function randomString()
@@ -4290,12 +4719,13 @@ local function synsaveinstance(CustomOptions, CustomOptions2)
 			end)
 		end
 
+		local streamingCleanup, streamingError
 		if OPTIONS.SetStreaming then
-			print("[saveinstance] SetStreaming: force-loading the whole map (slow + laggy on big maps)...")
+			print("[saveinstance] SetStreaming: requesting the configured map area...")
 			if StatusText then
 				StatusText.Text = "Streaming map in (this can take a while)..."
 			end
-			local streamOk, streamReason = StreamEntireMap(OPTIONS, function(streamed, totalChunks, eta)
+			local streamOk, streamReason, cleanup = StreamEntireMap(OPTIONS, function(streamed, totalChunks, eta)
 				if StatusText then
 					StatusText.Text = string.format(
 						"Streaming map: %d / %d chunks%s",
@@ -4308,46 +4738,37 @@ local function synsaveinstance(CustomOptions, CustomOptions2)
 					ProgressFill.Size = UDim2.new(streamed / totalChunks, 0, 1, 0)
 				end
 			end)
-			print(streamOk and "[saveinstance] Streaming complete." or ("[saveinstance] Streaming skipped: " .. tostring(streamReason)))
-			-- Terrain (SmoothGrid/PhysicsGrid) was captured at LOAD, before streaming — so on a streaming
-			-- map it only had the spawn-area terrain (the "squares of water" with missing land). Re-capture
-			-- it now that the sweep has streamed the rest of the terrain in.
-			if streamOk and realcheck then
+			streamingCleanup = cleanup
+			if streamOk then
+				print("[saveinstance] Streaming sweep finished: " .. tostring(streamReason))
+			else
+				warn("[saveinstance] Streaming sweep incomplete: " .. tostring(streamReason))
+				if OPTIONS.StreamingRequireComplete then streamingError = tostring(streamReason) end
+			end
+			-- Refresh the load-time terrain snapshot with whatever is available after the sweep.
+			if not streamingError and realcheck and not OPTIONS.IgnoreSpecialProperties then
 				local terrainGHP = gethiddenproperty or (getgenv and getgenv().gethiddenpropertygethiddenproperty)
 				if terrainGHP then
-					-- Let background terrain finish loading before reading the grid, so we capture the
-					-- FULL terrain instead of leaving floating-island gaps over water.
+					-- Allow additional settling before reading; this does not prove complete terrain.
 					if StatusText then
 						StatusText.Text = "Waiting for terrain to finish loading..."
 					end
 					wait_terrain_loaded(terrainGHP, math.clamp((tonumber(OPTIONS.StreamingSettleTime) or 5) * 2, 6, 25))
 					local reOk = pcall(function()
-						getfenv().physicsgrid = base64encode(terrainGHP(workspace.Terrain, "PhysicsGrid"))
-						getfenv().smoothgrid = base64encode(terrainGHP(workspace.Terrain, "SmoothGrid"))
+						local physics = base64encode(terrainGHP(workspace.Terrain, "PhysicsGrid"))
+						local smooth = base64encode(terrainGHP(workspace.Terrain, "SmoothGrid"))
+						getfenv().physicsgrid, getfenv().smoothgrid = physics, smooth
 					end)
 					print("[saveinstance] Terrain " .. (reOk and "re-captured after streaming." or "re-capture failed (keeping load-time copy)."))
 					dbg("[stream] terrain re-capture ok=", reOk)
 				end
 			end
-			-- Streaming teleports the character around; its final spot can be just under the terrain, and
-			-- Studio opens the place at the saved camera. Lift the camera above the map so it doesn't open
-			-- underground.
-			pcall(function()
-				local cam = workspace.CurrentCamera
-				local plr = service.Players.LocalPlayer
-				local char = plr and plr.Character
-				local root = char and (char:FindFirstChild("HumanoidRootPart") or char.PrimaryPart)
-				local focus = (root and root.Position) or (cam and cam.CFrame.Position) or Vector3.new(0, 0, 0)
-				if cam then
-					cam.CFrame = CFrame.new(focus + Vector3.new(0, 300, 300), focus)
-				end
-			end)
 			if ProgressFill then -- reset the bar for the save phase
 				ProgressFill.Size = UDim2.new(0, 0, 1, 0)
 			end
 		end
 
-		if OPTIONS.ExportObj then
+		if OPTIONS.ExportObj and not streamingError then
 			local objName = (placename or ("place " .. game.PlaceId .. ".rbxlx")):gsub("%.rbxl?x$", ".obj"):gsub("%.rbxmx$", ".obj")
 			print("[saveinstance] ExportObj: baking MeshPart geometry to '" .. objName .. "' (recovers private meshes Studio can't load; file can be large on big maps)...")
 			if StatusText then
@@ -4376,40 +4797,49 @@ local function synsaveinstance(CustomOptions, CustomOptions2)
 			end
 		end
 
-		if OPTIONS.DecompilePrepass and not OPTIONS.noscripts and ScriptCache and ldeccache then
-			print("[saveinstance] DecompilePrepass: decompiling all scripts in parallel...")
+		if OPTIONS.DecompilePrepass and not OPTIONS.DecompileJobless and not streamingError and not OPTIONS.noscripts and ScriptCache and ldeccache then
+			print("[saveinstance] DecompilePrepass: processing eligible exported scripts...")
 			if StatusText then
 				StatusText.Text = "Decompiling scripts (prepass)..."
 			end
-			local prepassOk, prepassReason = RunDecompilePrepass(ldeccache, OPTIONS, function(decompiled, totalScripts, eta)
-				if StatusText then
-					StatusText.Text = string.format(
-						"Decompile prepass: %d / %d scripts%s",
-						decompiled,
-						totalScripts,
-						eta and (" (~" .. fmt_eta(eta) .. " left)") or ""
-					)
-				end
-				if ProgressFill and totalScripts > 0 then
-					ProgressFill.Size = UDim2.new(decompiled / totalScripts, 0, 1, 0)
-				end
-			end)
-			print(prepassOk and "[saveinstance] Decompile prepass complete." or ("[saveinstance] Decompile prepass skipped: " .. tostring(prepassReason)))
+            local callOk, prepassOk, prepassReason, stats = pcall(RunDecompilePrepass,
+                ldeccache, OPTIONS, function(p)
+                    if StatusText then
+                        StatusText.Text = string.format("%s: %d/%d | %d ok, %d failed\n%d cached | %d active%s",
+                            DecompilerName, p.completed, p.total, p.succeeded, p.failed, p.cached, p.active,
+                            p.eta and (" | ETA " .. fmt_eta(p.eta)) or "")
+                    end
+                    if ProgressFill and p.total > 0 then
+                        ProgressFill.Size = UDim2.new(p.completed / p.total, 0, 1, 0)
+                    end
+                end, NativeDecompiler, DecompilerName, ToSaveList, IgnoreList, DecompileIgnore, InstancesOverrides, IgnoreNotArchivable)
+            -- A cancelled native call may still run: never start on-demand replacement work.
+            prepassStopped = not callOk or (stats and stats.aborted)
+            print(callOk and prepassOk and "[saveinstance] Decompile prepass complete."
+                or "[saveinstance] Prepass stopped/skipped: " .. tostring(callOk and prepassReason or prepassOk))
+
 			if ProgressFill then -- reset the bar for the save phase
 				ProgressFill.Size = UDim2.new(0, 0, 1, 0)
 			end
 		end
 
-		if OPTIONS.NeutralizeLighting then
+		if OPTIONS.NeutralizeLighting and not streamingError then
 			print("[saveinstance] NeutralizeLighting: resetting Lighting/Atmosphere to clean daylight.")
 			neutralize_lighting()
 		end
 
 		elapse_t = os.clock()
 
-		local ok, err = xpcall(save_game, function(err)
+		local ok, err = xpcall(function()
+			if streamingError then error("Export cancelled: incomplete streaming sweep: " .. streamingError) end
+			save_game()
+		end, function(err)
 			return debug.traceback(err)
 		end)
+
+		if StopElapsedClock then StopElapsedClock() end
+
+		if streamingCleanup then streamingCleanup() end
 
 		do -- console summary (size + time), regardless of whether the on-screen status is shown
 			local elapsed = os.clock() - elapse_t
@@ -4497,3 +4927,192 @@ end
 --   local synsaveinstance = loadstring(game:HttpGet(RepoURL .. "saveinstance.luau", true), "saveinstance")()
 --   synsaveinstance({ ...options... })
 return synsaveinstance
+end -- InitializeSaver
+
+-- Preview lives outside initialization: no terrain reads, HTTP, files, or decompiler calls.
+local previewEnvironment = getgenv and getgenv() or _G
+local function ClearStreamingPreview()
+    local previous = previewEnvironment.__SSIStreamingPreview
+    if previous then previous:Destroy() end
+end
+local function CreateStreamingPreview(O)
+    ClearStreamingPreview()
+    local players = game:GetService("Players")
+    local player = players.LocalPlayer
+    local plan, reason = BuildStreamingPlan(O, player)
+    assert(plan, reason)
+    local camera = workspace.CurrentCamera
+    assert(camera, "Streaming preview needs a camera")
+    local alpha = streamNumber(O.StreamingPreviewTransparency, 0.5, 0, 1)
+    local root = Instance.new("Folder")
+    root.Name = "SaveInstance_StreamingPreview"
+    root.Archivable = false
+    root.Parent = camera
+    local gui, oldCamera, connection
+    local handle = {Plan=plan, OnlyPreview=true, Transparency=alpha}
+    local removed = false
+    function handle:Destroy()
+        if removed then return end
+        removed = true
+        if connection then connection:Disconnect() end
+        if oldCamera and workspace.CurrentCamera == camera then
+            camera.CameraType = oldCamera.kind
+            camera.CFrame = oldCamera.frame
+            camera.Focus = oldCamera.focus
+        end
+        if gui then gui:Destroy() end
+        root:Destroy()
+        if previewEnvironment.__SSIStreamingPreview == self then
+            previewEnvironment.__SSIStreamingPreview = nil
+        end
+    end
+    previewEnvironment.__SSIStreamingPreview = handle
+    local ok, err = pcall(function()
+        local anchor = Instance.new("Part")
+        anchor.Name = "PreviewAnchor"
+        anchor.Anchored = true
+        anchor.Transparency = 1
+        anchor.CanCollide, anchor.CanTouch, anchor.CanQuery = false, false, false
+        anchor.CastShadow, anchor.Archivable = false, false
+        anchor.Size = Vector3.new(1,1,1)
+        anchor.CFrame = CFrame.new(plan.center)
+        anchor.Parent = root
+        local tint = Color3.fromRGB(125, 195, 235)
+        local function box(name, size, position, transparency, color)
+            local part = Instance.new("BoxHandleAdornment")
+            part.Name = name
+            part.Adornee = anchor
+            part.Size = size
+            part.CFrame = CFrame.new(position - plan.center)
+            part.Transparency = transparency
+            part.Color3 = color or tint
+            part.AlwaysOnTop = true
+            part.ZIndex = 1
+            part.Archivable = false
+            part.Parent = root
+            return part
+        end
+        local low, high = plan.points[1], plan.points[1]
+        for _, point in plan.points do
+            low = Vector3.new(math.min(low.X,point.X),math.min(low.Y,point.Y),math.min(low.Z,point.Z))
+            high = Vector3.new(math.max(high.X,point.X),math.max(high.Y,point.Y),math.max(high.Z,point.Z))
+        end
+        local middle = (low + high) / 2
+        local span = high - low
+        box("RequestedArea", Vector3.new(math.max(span.X,1),0.3,math.max(span.Z,1)), middle, alpha)
+        if not plan.custom and plan.area > 0 then
+            -- Limit decorations independently of the real request count.
+            local step = math.max(1, math.ceil(plan.width / 100))
+            for index=0,plan.width-1,step do
+                local offset = -plan.area/2 + index*plan.area/plan.divisions
+                box("GridX",Vector3.new(0.6,0.6,plan.area),plan.center+Vector3.new(offset,0.5,0),0.15)
+                box("GridZ",Vector3.new(plan.area,0.6,0.6),plan.center+Vector3.new(0,0.5,offset),0.15)
+            end
+            -- The outer boundary remains visible even when grid lines are sampled.
+            for _, sign in {-1,1} do
+                box("BoundaryX",Vector3.new(2,2,plan.area),plan.center+Vector3.new(sign*plan.area/2,1,0),0)
+                box("BoundaryZ",Vector3.new(plan.area,2,2),plan.center+Vector3.new(0,1,sign*plan.area/2),0)
+            end
+        end
+        local markerStep = math.max(1,math.ceil(plan.total / 400))
+        local markers = 0
+        for index=1,plan.total,markerStep do
+            box("RequestPoint",Vector3.new(5,5,5),plan.points[index],0.15,Color3.fromRGB(239,215,126))
+            markers += 1
+        end
+        handle.Markers = markers
+        gui = Instance.new("ScreenGui")
+        gui.Name = "SaveInstanceStreamingPreview"
+        gui.ResetOnSpawn = false
+        gui.DisplayOrder = 2000000000
+        local parent = player and player:FindFirstChildOfClass("PlayerGui")
+        gui.Parent = parent or game:GetService("CoreGui")
+        local panel = Instance.new("Frame")
+        panel.AnchorPoint = Vector2.new(0.5,0)
+        panel.Position = UDim2.new(0.5,0,0,72)
+        panel.Size = UDim2.new(0.9,0,0,170)
+        panel.BackgroundColor3 = Color3.fromRGB(20,24,33)
+        panel.BackgroundTransparency = 0.06
+        panel.BorderSizePixel = 0
+        panel.Parent = gui
+        local limit = Instance.new("UISizeConstraint")
+        limit.MaxSize = Vector2.new(600,170)
+        limit.Parent = panel
+        local corner = Instance.new("UICorner")
+        corner.CornerRadius = UDim.new(0,10)
+        corner.Parent = panel
+        local text = Instance.new("TextLabel")
+        text.BackgroundTransparency = 1
+        text.Size = UDim2.new(1,-24,0,116)
+        text.Position = UDim2.fromOffset(12,6)
+        text.Font = Enum.Font.Gotham
+        text.TextColor3 = Color3.fromRGB(235,242,248)
+        text.TextSize = 15
+        text.TextWrapped = true
+        text.Text = string.format("STREAMING PREVIEW ONLY - nothing is being saved\nArea: %.0f x %.0f studs | Grid spacing: %.0f studs\n%d requests | %d markers shown\nBlue = planned area; yellow = request points, not confirmed coverage.",span.X,span.Z,plan.spacing,plan.total,markers)
+        text.Parent = panel
+        local function button(label, x)
+            local b = Instance.new("TextButton")
+            b.Size = UDim2.new(0.5,-18,0,36)
+            b.Position = UDim2.new(x,12,1,-46)
+            b.BackgroundColor3 = Color3.fromRGB(65,93,116)
+            b.TextColor3 = Color3.new(1,1,1)
+            b.Font = Enum.Font.GothamBold
+            b.TextSize = 14
+            b.Text = label
+            b.Parent = panel
+            return b
+        end
+        local view = button("View from above",0)
+        view.Activated:Connect(function()
+            if oldCamera then
+                camera.CameraType = oldCamera.kind
+                camera.CFrame, camera.Focus = oldCamera.frame, oldCamera.focus
+                oldCamera = nil
+                view.Text = "View from above"
+            else
+                oldCamera = {kind=camera.CameraType,frame=camera.CFrame,focus=camera.Focus}
+                camera.CameraType = Enum.CameraType.Scriptable
+                camera.CFrame = CFrame.lookAt(middle+Vector3.new(0,math.max(span.X,span.Z,100)*0.85,0),middle,Vector3.new(0,0,-1))
+                camera.Focus = CFrame.new(middle)
+                view.Text = "Restore camera"
+            end
+        end)
+        button("Clear preview",0.5).Activated:Connect(function() handle:Destroy() end)
+        connection = workspace:GetPropertyChangedSignal("CurrentCamera"):Connect(function() handle:Destroy() end)
+    end)
+    if not ok then handle:Destroy(); error(err,0) end
+    return handle
+end
+
+local cachedSaver
+return function(options, secondOptions)
+    local source = type(secondOptions)=="table" and secondOptions or options
+    local previewOptions = {}
+    if type(source)=="table" then
+        local names = {streamingpreview="StreamingPreview", previewonly="StreamingPreview",
+            streamingpreviewtransparency="StreamingPreviewTransparency", streamingareasize="StreamingAreaSize",
+            streamingradius="StreamingRadius", streamingcenter="StreamingCenter", streamingslices="StreamingSlices",
+            streamingpasses="StreamingPasses", streamingpoints="StreamingPoints"}
+        for key,value in source do
+            local name = type(key)=="string" and names[string.lower(key)]
+            if name then previewOptions[name]=value end
+        end
+    end
+    if previewOptions.StreamingPreview == "clear" then ClearStreamingPreview(); return end
+    if previewOptions.StreamingPreview == true then
+        assert(not previewEnvironment.__SSISaveInProgress, "Wait for the current export before previewing")
+        return CreateStreamingPreview(previewOptions)
+    end
+    assert(not previewOptions.StreamingPreview, 'StreamingPreview must be true, false, or "clear"')
+    ClearStreamingPreview() -- Helpers and preview camera state must never enter an export.
+    assert(not previewEnvironment.__SSISaveInProgress, "A SaveInstance export is already running")
+    previewEnvironment.__SSISaveInProgress = true
+    local result = table.pack(pcall(function()
+        if not cachedSaver then cachedSaver = InitializeSaver() end
+        return cachedSaver(options, secondOptions)
+    end))
+    previewEnvironment.__SSISaveInProgress = nil
+    if not result[1] then error(result[2],0) end
+    return table.unpack(result,2,result.n)
+end

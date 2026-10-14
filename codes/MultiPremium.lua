@@ -1,5 +1,3 @@
-getgenv().script_id = "kicia"
-
 local configs = {
 	parob = {
 		name = "Project Auto - Auto Rob",
@@ -90,18 +88,14 @@ local configs = {
 local id = getgenv().script_id
 
 if not id then
-	game:GetService("Players").LocalPlayer:Kick(
-		"Missing script id."
-	)
+	game:GetService("Players").LocalPlayer:Kick("Missing script id.")
 	return
 end
 
 local cfg = configs[id]
 
 if not cfg then
-	game:GetService("Players").LocalPlayer:Kick(
-		"Invalid script id: "..tostring(id)
-	)
+	game:GetService("Players").LocalPlayer:Kick("Invalid script id: "..tostring(id))
 	return
 end
 
@@ -110,6 +104,20 @@ local p = game:GetService("Players").LocalPlayer
 pcall(function()
     p:WaitForChild("PlayerGui"):FindFirstChild("KeyUI"):Destroy()
 end)
+
+local function notify(text, duration, title)
+	if game.GameId == 245662005 then
+		require(game:GetService("ReplicatedStorage").Game.Notification).new({
+			Text = text,
+			Duration = duration,
+		})
+	else
+		game:GetService("StarterGui"):SetCore("SendNotification", {
+			Title = title,
+			Text = text,
+		})
+	end
+end
 
 local g = Instance.new("ScreenGui", p:WaitForChild("PlayerGui"))
 g.Name = "KeyUI"
@@ -191,12 +199,15 @@ end)
 
 get.MouseButton1Click:Connect(function()
 	setclipboard(cfg.key)
+	notify("Copied link to clipboard!", 2, cfg.name)
 end)
 
 enter.MouseButton1Click:Connect(function()
 	local key = box.Text
 
 	if key and key:gsub("%s","") ~= "" then
+		notify("Loading...", 2, cfg.name)
+
 		g:Destroy()
 
 		if cfg.free and key:upper() == "FREE" then
